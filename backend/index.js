@@ -68,7 +68,6 @@ app.get('/api/users', verifyAuth, async (req, res) => {
     }
 });
 
-// Send notification (Example of server-side logic)
 // Protected: send notification (requires valid Firebase ID token)
 app.post('/api/send-notification', verifyAuth, async (req, res) => {
     const { token, title, body } = req.body;
@@ -84,6 +83,48 @@ app.post('/api/send-notification', verifyAuth, async (req, res) => {
         res.status(200).json({ success: true, response });
     } catch (error) {
     debug('[notify] Error sending notification:', error && error.message ? error.message : error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin/Utility: Seed initial data
+// Note: In a production app, this should be highly restricted or removed.
+app.post('/api/seed-data', async (req, res) => {
+    try {
+        console.log("Seeding initial data...");
+        
+        // Seed some communities
+        const communities = [
+            { name: "Travel Buddies", description: "Connect with fellow travelers around the world." },
+            { name: "Culinary Arts", description: "Share recipes and cooking tips with foodies." },
+            { name: "Wellness & Yoga", description: "A space for mindfulness and physical health." },
+            { name: "General", description: "The main community for everyone." }
+        ];
+
+        for (const community of communities) {
+            await db.collection('communities').doc(community.name).set({
+                ...community,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                members: []
+            }, { merge: true });
+        }
+
+        // Seed a sample system user if doesn't exist
+        await db.collection('users').doc('system_user').set({
+            uid: 'system_user',
+            email: 'system@letschat.com',
+            name: 'System Assistant',
+            about: 'I am here to help you get started!',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            settings: {
+                Privacy: { "Last seen": "Everyone" }
+            }
+        }, { merge: true });
+
+        console.log("Seeding completed successfully.");
+        res.status(200).json({ success: true, message: "Initial data seeded successfully." });
+    } catch (error) {
+        console.error("Seeding error:", error);
         res.status(500).json({ error: error.message });
     }
 });

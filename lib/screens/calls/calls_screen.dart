@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
+import '../../core/services/chat_service.dart';
 import '../../widgets/bottom_nav.dart';
 import '../chats/chats_screen.dart';
+import '../community/community_screen.dart';
+import '../settings/settings_detail_screen.dart';
+import '../chats/new_message_screen.dart';
 import '../updates/updates_screen.dart';
 
 class CallsScreen extends StatelessWidget {
@@ -9,6 +15,7 @@ class CallsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chatService = Provider.of<ChatService>(context);
 
     return Scaffold(
       body: Container(
@@ -18,82 +25,301 @@ class CallsScreen extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-
-              const SizedBox(height: 20),
-
+              // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
                       "Calls",
                       style: TextStyle(
-                        fontSize: 34,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const Icon(Icons.person_add_alt_1)
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.search),
+                          onPressed: () {},
+                        ),
+                    PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert),
+                          onSelected: (value) async {
+                            if (value == 'Clear call log') {
+                              await chatService.clearCallLog();
+                            } else if (value == 'Schedule calls') {
+                              _scheduleCall(context);
+                            }
+                          },
+                          itemBuilder: (BuildContext context) {
+                            return [
+                              'Clear call log',
+                              'Schedule calls',
+                            ].map((String choice) {
+                              return PopupMenuItem<String>(
+                                value: choice,
+                                child: Text(choice),
+                              );
+                            }).toList();
+                          },
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 24),
-
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: 6,
-                  itemBuilder: (_, index) {
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.75),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Row(
-                        children: [
-
-                          CircleAvatar(
-                            radius: 28,
-                            backgroundColor: Colors.pink.shade200,
-                          ),
-
-                          const SizedBox(width: 14),
-
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Julian Vance",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text("Outgoing • 10:24 AM")
-                              ],
-                            ),
-                          ),
-
-                          const Icon(Icons.call)
-                        ],
-                      ),
-                    );
-                  },
+              // Call Control Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _controlIcon(context, Icons.call_outlined, "Call"),
+                    _controlIcon(context, Icons.calendar_month_outlined, "Schedule"),
+                    _controlIcon(context, Icons.dialpad_outlined, "Keypad"),
+                    _controlIcon(context, Icons.star_outline, "Favourite"),
+                  ],
                 ),
               ),
 
-              const BottomNav(
-  currentIndex: 0,
-)
+              const SizedBox(height: 10),
+
+              // Call Log List
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: chatService.getCallLogs(),
+                  builder: (context, snapshot) {
+                    return ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      children: [
+                        // New Call Option
+                        ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: AppColors.mint,
+                            child: Icon(Icons.add_call, color: Colors.white),
+                          ),
+                          title: const Text("New call", style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: const Text("Select a contact to call"),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const NewMessageScreen()),
+                            );
+                          },
+                        ),
+                        const Divider(),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "Recent Calls",
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
+                        ),
+                        const SizedBox(height: 10),
+
+                        if (snapshot.hasError) Center(child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Text("Error: ${snapshot.error}"),
+                        )),
+                        if (snapshot.connectionState == ConnectionState.waiting) const Center(child: CircularProgressIndicator()),
+
+                        if (snapshot.hasData && snapshot.data!.docs.isEmpty)
+                          const Center(child: Padding(
+                            padding: EdgeInsets.only(top: 50),
+                            child: Text("No recent calls"),
+                          )),
+                        
+                        if (snapshot.hasData)
+                          ...snapshot.data!.docs.map((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final String name = data['receiverName'];
+                            final String receiverId = data['receiverId'];
+                            final String time = (data['timestamp'] as Timestamp?)?.toDate().toString().substring(11, 16) ?? "";
+                            final String details = "${data['status']} • $time";
+                            final IconData icon = data['status'] == 'missed' ? Icons.call_missed : (data['status'] == 'outgoing' ? Icons.call_made : Icons.call_received);
+                            final Color color = data['status'] == 'missed' ? Colors.red : (data['status'] == 'outgoing' ? Colors.green : Colors.blue);
+
+                            return _callLogItem(context, name, receiverId, details, icon, color, Colors.pink.shade100);
+                          }),
+                      ],
+                    );
+                  }
+                ),
+              ),
+
+              const BottomNav(currentIndex: 0),
             ],
           ),
         ),
       ),
     );
   }
-}
+
+  Widget _controlIcon(BuildContext context, IconData icon, String label) {
+    return GestureDetector(
+      onTap: () {
+        if (label == "Schedule") {
+          _scheduleCall(context);
+        } else if (label == "Call") {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const NewMessageScreen()));
+        } else if (label == "Keypad") {
+          _showKeypad(context);
+        } else if (label == "Favourite") {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Filtering favourites...")));
+        }
+      },
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.6),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.black87),
+          ),
+          const SizedBox(height: 5),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  void _showKeypad(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Dialer", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 15),
+              Flexible(
+                child: GridView.count(
+                  shrinkWrap: true,
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 5,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.5,
+                  children: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map((key) {
+                    return InkWell(
+                      onTap: () {},
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
+                        child: Text(key, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 15),
+              CircleAvatar(
+                radius: 30,
+                backgroundColor: Colors.green,
+                child: IconButton(
+                  icon: const Icon(Icons.call, color: Colors.white, size: 28),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Calling...")));
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _scheduleCall(BuildContext context) async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.mint,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate != null && context.mounted) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.now(),
+      );
+
+      if (pickedTime != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Call scheduled for ${pickedDate.day}/${pickedDate.month}/${pickedDate.year} at ${pickedTime.format(context)}"),
+            backgroundColor: AppColors.mint,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _callLogItem(BuildContext context, String name, String receiverId, String details, IconData statusIcon, Color statusColor, Color avatarColor) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.75),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 25,
+            backgroundColor: avatarColor,
+            child: Text(name[0], style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(statusIcon, size: 14, color: statusColor),
+                    const SizedBox(width: 5),
+                    Text(details, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.call_outlined, color: Colors.black54),
+            onPressed: () {
+              final chatService = Provider.of<ChatService>(context, listen: false);
+              chatService.logCall(receiverId, name, 'voice');
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Calling $name...")));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}

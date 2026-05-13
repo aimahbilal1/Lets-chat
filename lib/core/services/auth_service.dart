@@ -98,4 +98,66 @@ class AuthService extends ChangeNotifier {
   Future<void> signOut() async {
     await _auth.signOut();
   }
+
+  // Delete account logic
+  Future<String?> deleteAccount() async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        // Delete Firestore data
+        await _firestore.collection('users').doc(user.uid).delete();
+        
+        // Delete Auth user
+        await user.delete();
+        return null;
+      }
+      return "No user logged in";
+    } on FirebaseAuthException catch (e) {
+      return _mapError(e.code);
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // Update phone number
+  Future<String?> updatePhoneNumber(String newPhone) async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        await _firestore.collection('users').doc(user.uid).update({
+          'phone': newPhone,
+        });
+        return null;
+      }
+      return "No user logged in";
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // Update user settings (Privacy, Chats, Notifications, etc.)
+  Future<void> updateSettings(String category, String key, dynamic value) async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        await _firestore.collection('users').doc(user.uid).set({
+          'settings': {
+            category: {
+              key: value,
+            }
+          }
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint("Error updating settings: $e");
+    }
+  }
+
+  // Calculate storage usage (placeholder logic)
+  Future<Map<String, String>> getStorageUsage() async {
+    return {
+      'used': '124 MB',
+      'total': '1 GB',
+    };
+  }
 }

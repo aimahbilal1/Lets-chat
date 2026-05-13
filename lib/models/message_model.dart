@@ -6,6 +6,9 @@ class MessageModel {
   final String receiverId;
   final String message;
   final Timestamp timestamp;
+  final bool isRead;
+  final bool isStarred;
+  final String messageType; // text, voice, image, doc, location
 
   MessageModel({
     required this.senderId,
@@ -13,6 +16,9 @@ class MessageModel {
     required this.receiverId,
     required this.message,
     required this.timestamp,
+    this.isRead = false,
+    this.isStarred = false,
+    this.messageType = 'text',
   });
 
   Map<String, dynamic> toMap() {
@@ -22,6 +28,9 @@ class MessageModel {
       'receiverId': receiverId,
       'message': message,
       'timestamp': timestamp,
+      'isRead': isRead,
+      'isStarred': isStarred,
+      'messageType': messageType,
     };
   }
 
@@ -32,6 +41,9 @@ class MessageModel {
       receiverId: map['receiverId'],
       message: map['message'],
       timestamp: map['timestamp'],
+      isRead: map['isRead'] ?? false,
+      isStarred: map['isStarred'] ?? false,
+      messageType: map['messageType'] ?? 'text',
     );
   }
 }

@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'screens/splash/splash_screen.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/chat_service.dart';
+import 'core/services/storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,7 @@ class LetsChatApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => ChatService()),
+        Provider(create: (_) => StorageService()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
