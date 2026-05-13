@@ -193,6 +193,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               : chatService.getUsersStream(),
                           builder: (context, snapshot) {
                             if (snapshot.hasError) {
+                              debugPrint('[ChatsScreen] users stream error: ${snapshot.error}');
                               return Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,

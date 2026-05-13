@@ -92,6 +92,9 @@ class CallsScreen extends StatelessWidget {
                 child: StreamBuilder<QuerySnapshot>(
                   stream: chatService.getCallLogs(),
                   builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      debugPrint('[CallsScreen] call log stream error: ${snapshot.error}');
+                    }
                     return ListView(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       children: [
@@ -322,4 +325,4 @@ class CallsScreen extends StatelessWidget {
       ),
     );
   }
-}
+}
