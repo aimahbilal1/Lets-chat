@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
+import '../../core/services/auth_service.dart';
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/setting_tile.dart';
-import '../auth/signup_screen.dart';
+import '../welcome/welcome_screen.dart';
 import 'edit_profile_screen.dart';
 import 'settings_detail_screen.dart';
 
@@ -156,22 +158,24 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(height: 20),
 
                       GestureDetector(
-                        onTap: () {
-
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SignupScreen(),
-                            ),
-                            (route) => false,
-                          );
+                        onTap: () async {
+                          final authService = Provider.of<AuthService>(
+                              context,
+                              listen: false);
+                          await authService.signOut();
+                          if (context.mounted) {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const WelcomeScreen()),
+                              (route) => false,
+                            );
+                          }
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 18,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.white.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(24),
                           ),
                           alignment: Alignment.center,

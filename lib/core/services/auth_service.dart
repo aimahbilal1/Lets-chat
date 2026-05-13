@@ -11,61 +11,91 @@ class AuthService extends ChangeNotifier {
 
   AuthService() {
     _auth.authStateChanges().listen((User? user) {
-      debugPrint("Auth State Changed: ${user?.email ?? 'Logged Out'}");
       _user = user;
       notifyListeners();
     });
   }
 
-  Future<String?> signUp(String email, String password) async {
-    debugPrint("Attempting Sign Up for: $email");
+  String _mapError(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'An account with this email already exists.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'user-not-found':
+        return 'No account found with this email.';
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Incorrect email or password.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'network-request-failed':
+        return 'Check your internet connection and try again.';
+      default:
+        return 'Something went wrong. Please try again.';
+    }
+  }
+
+  Future<String?> signUp(
+    String email,
+    String password,
+    String name, {
+    String? phone,
+  }) async {
     try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-
-      debugPrint("Sign Up successful: ${userCredential.user!.uid}");
-
-      // Save user info to firestore
+      await credential.user!.updateDisplayName(name);
       try {
-        await _firestore.collection('users').doc(userCredential.user!.uid).set({
-          'uid': userCredential.user!.uid,
+        await _firestore.collection('users').doc(credential.user!.uid).set({
+          'uid': credential.user!.uid,
           'email': email,
+          'name': name,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+          'createdAt': FieldValue.serverTimestamp(),
+          'photoUrl': null,
         });
-        debugPrint("User info saved to Firestore");
       } catch (e) {
-        debugPrint("Firestore Error (SignUp): $e");
-        return "Account created, but failed to save profile: $e. Check your Firestore rules.";
+        debugPrint('Firestore error during signUp: $e');
+        return 'Account created but profile could not be saved. Check Firestore rules.';
       }
-
       return null;
     } on FirebaseAuthException catch (e) {
-      debugPrint("Firebase Auth Error (SignUp): ${e.code} - ${e.message}");
-      return e.message;
-    } catch (e) {
-      debugPrint("Unexpected Error (SignUp): $e");
-      return "An unexpected error occurred: $e";
+      return _mapError(e.code);
+    } catch (_) {
+      return 'Something went wrong. Please try again.';
     }
   }
 
   Future<String?> signIn(String email, String password) async {
-    debugPrint("Attempting Sign In for: $email");
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      debugPrint("Sign In successful");
       return null;
     } on FirebaseAuthException catch (e) {
-      debugPrint("Firebase Auth Error (SignIn): ${e.code} - ${e.message}");
-      return e.message;
-    } catch (e) {
-      debugPrint("Unexpected Error (SignIn): $e");
-      return "An unexpected error occurred: $e";
+      return _mapError(e.code);
+    } catch (_) {
+      return 'Something went wrong. Please try again.';
+    }
+  }
+
+  Future<String?> resetPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return _mapError(e.code);
+    } catch (_) {
+      return 'Something went wrong. Please try again.';
     }
   }
 
   Future<void> signOut() async {
-    debugPrint("Signing Out");
     await _auth.signOut();
   }
 }
