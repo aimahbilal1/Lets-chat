@@ -19,28 +19,27 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-
                 const SizedBox(height: 10),
 
                 StreamBuilder<DocumentSnapshot>(
-                  stream: currentUserId.isNotEmpty
-                      ? FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(currentUserId)
-                          .snapshots()
-                      : const Stream.empty(),
+                  stream:
+                      currentUserId.isNotEmpty
+                          ? FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(currentUserId)
+                              .snapshots()
+                          : const Stream.empty(),
                   builder: (context, snapshot) {
                     String? photoUrl;
                     if (snapshot.hasData && snapshot.data?.data() != null) {
-                      final data = snapshot.data!.data() as Map<String, dynamic>;
+                      final data =
+                          snapshot.data!.data() as Map<String, dynamic>;
                       photoUrl = data['photoUrl'];
                     }
                     return CircleAvatar(
@@ -48,12 +47,10 @@ class SettingsScreen extends StatelessWidget {
                       backgroundColor: Colors.pink.shade200,
                       backgroundImage:
                           photoUrl != null ? NetworkImage(photoUrl) : null,
-                      child: photoUrl == null
-                          ? const Icon(
-                              Icons.person,
-                              size: 45,
-                            )
-                          : null,
+                      child:
+                          photoUrl == null
+                              ? const Icon(Icons.person, size: 45)
+                              : null,
                     );
                   },
                 ),
@@ -61,12 +58,13 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 StreamBuilder<DocumentSnapshot>(
-                  stream: currentUserId.isNotEmpty
-                      ? FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(currentUserId)
-                          .snapshots()
-                      : const Stream.empty(),
+                  stream:
+                      currentUserId.isNotEmpty
+                          ? FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(currentUserId)
+                              .snapshots()
+                          : const Stream.empty(),
                   builder: (context, snapshot) {
                     String displayName =
                         authService.user?.displayName ?? "User";
@@ -75,8 +73,7 @@ class SettingsScreen extends StatelessWidget {
                     if (snapshot.hasData && snapshot.data?.data() != null) {
                       final data =
                           snapshot.data!.data() as Map<String, dynamic>;
-                      displayName =
-                          data['name'] ?? displayName;
+                      displayName = data['name'] ?? displayName;
                       about = data['about'] ?? about;
                     }
 
@@ -92,9 +89,7 @@ class SettingsScreen extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           about,
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                          ),
+                          style: TextStyle(color: Colors.grey.shade700),
                         ),
                       ],
                     );
@@ -136,7 +131,6 @@ class SettingsScreen extends StatelessWidget {
                 Expanded(
                   child: ListView(
                     children: [
-
                       SettingTile(
                         icon: Icons.favorite_outline,
                         title: "Favorites",
@@ -206,14 +200,16 @@ class SettingsScreen extends StatelessWidget {
                       GestureDetector(
                         onTap: () async {
                           final authService = Provider.of<AuthService>(
-                              context,
-                              listen: false);
+                            context,
+                            listen: false,
+                          );
                           await authService.signOut();
                           if (context.mounted) {
                             Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(
-                                  builder: (_) => const WelcomeScreen()),
+                                builder: (_) => const WelcomeScreen(),
+                              ),
                               (route) => false,
                             );
                           }
@@ -233,14 +229,12 @@ class SettingsScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ),
 
-                const BottomNav(
-                  currentIndex: 4,
-                )
+                const BottomNav(currentIndex: 4),
               ],
             ),
           ),
@@ -250,14 +244,9 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void openDetails(BuildContext context, String title) {
-
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => SettingsDetailScreen(
-          title: title,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => SettingsDetailScreen(title: title)),
     );
   }
 }

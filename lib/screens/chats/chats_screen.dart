@@ -133,9 +133,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                             } else if (value == "Linked devices") {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text(
-                                    "Linked devices coming soon",
-                                  ),
+                                  content: Text("Linked devices coming soon"),
                                 ),
                               );
                             }
@@ -237,125 +235,178 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
                       // Chat List
                       Expanded(
-                        child: selectedFilter == "Groups"
-                            ? StreamBuilder<QuerySnapshot>(
-                              stream: chatService.getGroupsStream(),
-                              builder: (context, snapshot) {
-                                if (snapshot.hasError) {
-                                  return const Center(child: Text("Error loading groups"));
-                                }
-                                if (snapshot.connectionState == ConnectionState.waiting) {
-                                  return const Center(child: CircularProgressIndicator());
-                                }
+                        child:
+                            selectedFilter == "Groups"
+                                ? StreamBuilder<QuerySnapshot>(
+                                  stream: chatService.getGroupsStream(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.hasError) {
+                                      return const Center(
+                                        child: Text("Error loading groups"),
+                                      );
+                                    }
+                                    if (snapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return const Center(
+                                        child: CircularProgressIndicator(),
+                                      );
+                                    }
 
-                                final groups = snapshot.data?.docs ?? [];
-                                if (groups.isEmpty) {
-                                  return const Center(
-                                    child: Text("No groups yet. Create one!"),
-                                  );
-                                }
+                                    final groups = snapshot.data?.docs ?? [];
+                                    if (groups.isEmpty) {
+                                      return const Center(
+                                        child: Text(
+                                          "No groups yet. Create one!",
+                                        ),
+                                      );
+                                    }
 
-                                return ListView.builder(
-                                  itemCount: groups.length,
-                                  itemBuilder: (context, index) {
-                                    final data =
-                                        groups[index].data() as Map<String, dynamic>;
-                                    final name = data['name'] ?? "Group";
-                                    final lastMessage =
-                                        data['lastMessage'] ?? "Start chatting";
+                                    return ListView.builder(
+                                      itemCount: groups.length,
+                                      itemBuilder: (context, index) {
+                                        final data =
+                                            groups[index].data()
+                                                as Map<String, dynamic>;
+                                        final name = data['name'] ?? "Group";
+                                        final lastMessage =
+                                            data['lastMessage'] ??
+                                            "Start chatting";
 
-                                    return ChatTile(
-                                      name: name,
-                                      message: lastMessage,
-                                      time: "Now",
-                                      leadingIcon: Icons.group,
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => GroupMessageScreen(
-                                              groupId: groups[index].id,
-                                              groupName: name,
-                                            ),
-                                          ),
+                                        return ChatTile(
+                                          name: name,
+                                          message: lastMessage,
+                                          time: "Now",
+                                          leadingIcon: Icons.group,
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder:
+                                                    (_) => GroupMessageScreen(
+                                                      groupId: groups[index].id,
+                                                      groupName: name,
+                                                    ),
+                                              ),
+                                            );
+                                          },
                                         );
                                       },
                                     );
                                   },
-                                );
-                              },
-                            )
-                            : StreamBuilder<List<Map<String, dynamic>>>(
-                              stream: _searchController.text.isNotEmpty
-                                  ? chatService.searchUsers(_searchController.text)
-                                  : chatService.getUsersStream(),
-                              builder: (context, snapshot) {
-                                if (snapshot.hasError) {
-                                  debugPrint('[ChatsScreen] users stream error: ${snapshot.error}');
-                                  return Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.error_outline, color: Colors.red, size: 40),
-                                        const SizedBox(height: 10),
-                                        const Text("Error loading chats"),
-                                        Text(snapshot.error.toString(), style: const TextStyle(fontSize: 10, color: Colors.black45)),
-                                        const SizedBox(height: 10),
-                                        TextButton(onPressed: () => setState(() {}), child: const Text("Retry")),
-                                      ],
-                                    ),
-                                  );
-                                }
-                                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-
-                                final data = snapshot.data ?? [];
-                                var users = data
-                                    .where((user) => user['uid'] != currentUser?.uid)
-                                    .toList();
-
-                                if (users.isEmpty) {
-                                  return const Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.chat_bubble_outline, size: 50, color: Colors.grey),
-                                        SizedBox(height: 10),
-                                        Text("No chats found. Start a new conversation!"),
-                                      ],
-                                    ),
-                                  );
-                                }
-
-                                return ListView.builder(
-                                  itemCount: users.length,
-                                  itemBuilder: (context, index) {
-                                    final user = users[index];
-                                    final String email = user['email'] ?? "User";
-                                    final String name = email.contains('@') ? email.split('@')[0] : email;
-
-                                    return ChatTile(
-                                      name: name,
-                                      message: user['about'] ?? "Tap to chat",
-                                      time: "Now",
-                                      avatarText: name.isNotEmpty
-                                          ? name[0].toUpperCase()
-                                          : null,
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => MessageScreen(
-                                              userName: name,
-                                              receiverId: user['uid'],
+                                )
+                                : StreamBuilder<List<Map<String, dynamic>>>(
+                                  stream:
+                                      _searchController.text.isNotEmpty
+                                          ? chatService.searchUsers(
+                                            _searchController.text,
+                                          )
+                                          : chatService.getUsersStream(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.hasError) {
+                                      debugPrint(
+                                        '[ChatsScreen] users stream error: ${snapshot.error}',
+                                      );
+                                      return Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(
+                                              Icons.error_outline,
+                                              color: Colors.red,
+                                              size: 40,
                                             ),
-                                          ),
+                                            const SizedBox(height: 10),
+                                            const Text("Error loading chats"),
+                                            Text(
+                                              snapshot.error.toString(),
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.black45,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            TextButton(
+                                              onPressed: () => setState(() {}),
+                                              child: const Text("Retry"),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+                                    if (snapshot.connectionState ==
+                                        ConnectionState.waiting)
+                                      return const Center(
+                                        child: CircularProgressIndicator(),
+                                      );
+
+                                    final data = snapshot.data ?? [];
+                                    var users =
+                                        data
+                                            .where(
+                                              (user) =>
+                                                  user['uid'] !=
+                                                  currentUser?.uid,
+                                            )
+                                            .toList();
+
+                                    if (users.isEmpty) {
+                                      return const Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.chat_bubble_outline,
+                                              size: 50,
+                                              color: Colors.grey,
+                                            ),
+                                            SizedBox(height: 10),
+                                            Text(
+                                              "No chats found. Start a new conversation!",
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+
+                                    return ListView.builder(
+                                      itemCount: users.length,
+                                      itemBuilder: (context, index) {
+                                        final user = users[index];
+                                        final String email =
+                                            user['email'] ?? "User";
+                                        final String name =
+                                            email.contains('@')
+                                                ? email.split('@')[0]
+                                                : email;
+
+                                        return ChatTile(
+                                          name: name,
+                                          message:
+                                              user['about'] ?? "Tap to chat",
+                                          time: "Now",
+                                          avatarText:
+                                              name.isNotEmpty
+                                                  ? name[0].toUpperCase()
+                                                  : null,
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder:
+                                                    (_) => MessageScreen(
+                                                      userName: name,
+                                                      receiverId: user['uid'],
+                                                    ),
+                                              ),
+                                            );
+                                          },
                                         );
                                       },
                                     );
                                   },
-                                );
-                              },
-                            ),
+                                ),
                       ),
                     ],
                   ),

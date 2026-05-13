@@ -167,7 +167,9 @@ class ChatService extends ChangeNotifier {
         .collection('groups')
         .where('members', arrayContains: currentUserId)
         .snapshots()
-        .handleError((error, stack) => _logError('getGroupsStream', error, stack));
+        .handleError(
+          (error, stack) => _logError('getGroupsStream', error, stack),
+        );
   }
 
   Stream<QuerySnapshot> getGroupMessages(String groupId) {
@@ -177,7 +179,9 @@ class ChatService extends ChangeNotifier {
         .collection('messages')
         .orderBy('timestamp', descending: false)
         .snapshots()
-        .handleError((error, stack) => _logError('getGroupMessages', error, stack));
+        .handleError(
+          (error, stack) => _logError('getGroupMessages', error, stack),
+        );
   }
 
   Future<void> sendGroupMessage(
@@ -197,14 +201,14 @@ class ChatService extends ChangeNotifier {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': currentUserId,
-        'senderEmail': currentUserEmail,
-        'message': message,
-        'mediaUrl': mediaUrl,
-        'fileName': fileName,
-        'timestamp': timestamp,
-        'messageType': type,
-      });
+            'senderId': currentUserId,
+            'senderEmail': currentUserEmail,
+            'message': message,
+            'mediaUrl': mediaUrl,
+            'fileName': fileName,
+            'timestamp': timestamp,
+            'messageType': type,
+          });
 
       await _firestore.collection('groups').doc(groupId).set({
         'lastMessage': message,

@@ -10,8 +10,49 @@ import '../settings/settings_detail_screen.dart';
 import '../chats/new_message_screen.dart';
 import '../updates/updates_screen.dart';
 
-class CallsScreen extends StatelessWidget {
+class CallsScreen extends StatefulWidget {
   const CallsScreen({super.key});
+
+  @override
+  State<CallsScreen> createState() => _CallsScreenState();
+}
+
+class _CallsScreenState extends State<CallsScreen> {
+  String _searchQuery = '';
+
+  bool _matchesQuery(String name) {
+    if (_searchQuery.trim().isEmpty) return true;
+    return name.toLowerCase().contains(_searchQuery.toLowerCase());
+  }
+
+  void _openSearch(BuildContext context) {
+    final controller = TextEditingController(text: _searchQuery);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Search calls'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: 'Type a name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() => _searchQuery = controller.text.trim());
+                Navigator.pop(context);
+              },
+              child: const Text('Search'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +84,7 @@ class CallsScreen extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.search),
-                          onPressed: () {},
+                          onPressed: () => _openSearch(context),
                         ),
                         PopupMenuButton<String>(
                           icon: const Icon(Icons.more_vert),
@@ -131,8 +172,14 @@ class CallsScreen extends StatelessWidget {
                         StreamBuilder<QuerySnapshot>(
                           stream: chatService.getScheduledCalls(),
                           builder: (context, scheduledSnapshot) {
-                            if (scheduledSnapshot.hasData &&
-                                scheduledSnapshot.data!.docs.isNotEmpty) {
+                            final docs = scheduledSnapshot.data?.docs ?? [];
+                            final filtered = docs.where((doc) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              final name = data['receiverName'] ?? 'User';
+                              return _matchesQuery(name);
+                            }).toList();
+
+                            if (filtered.isNotEmpty) {
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -145,11 +192,10 @@ class CallsScreen extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 10),
-                                  ...scheduledSnapshot.data!.docs.map((doc) {
+                                  ...filtered.map((doc) {
                                     final data =
                                         doc.data() as Map<String, dynamic>;
-                                    final name =
-                                        data['receiverName'] ?? 'User';
+                                    final name = data['receiverName'] ?? 'User';
                                     final scheduledAt =
                                         (data['scheduledAt'] as Timestamp?)
                                             ?.toDate();
@@ -203,10 +249,14 @@ class CallsScreen extends StatelessWidget {
                           ),
 
                         if (snapshot.hasData)
-                          ...snapshot.data!.docs.map((doc) {
+                          ...snapshot.data!.docs.where((doc) {
                             final data = doc.data() as Map<String, dynamic>;
-                            final String name = data['receiverName'];
-                            final String receiverId = data['receiverId'];
+                            final name = data['receiverName'] ?? 'User';
+                            return _matchesQuery(name);
+                          }).map((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final String name = data['receiverName'] ?? 'User';
+                            final String receiverId = data['receiverId'] ?? '';
                             final String time =
                                 (data['timestamp'] as Timestamp?)
                                     ?.toDate()
@@ -405,9 +455,8 @@ class CallsScreen extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final user = users[index];
                   final String email = user['email'] ?? 'User';
-                  final String name = email.contains('@')
-                      ? email.split('@')[0]
-                      : email;
+                  final String name =
+                      email.contains('@') ? email.split('@')[0] : email;
 
                   return ListTile(
                     leading: CircleAvatar(

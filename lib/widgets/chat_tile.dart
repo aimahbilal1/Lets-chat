@@ -36,15 +36,16 @@ class ChatTile extends StatelessWidget {
             CircleAvatar(
               radius: 28,
               backgroundColor: avatarColor ?? Colors.pink.shade200,
-              child: avatarText != null
-                  ? Text(
-                      avatarText!,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Icon(leadingIcon ?? Icons.person, color: Colors.white),
+              child:
+                  avatarText != null
+                      ? Text(
+                        avatarText!,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      )
+                      : Icon(leadingIcon ?? Icons.person, color: Colors.white),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -62,20 +63,15 @@ class ChatTile extends StatelessWidget {
                   Text(
                     message,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                    ),
-                  )
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
                 ],
               ),
             ),
             Text(
               time,
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 12,
-              ),
-            )
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+            ),
           ],
         ),
       ),

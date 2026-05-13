@@ -45,7 +45,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }, SetOptions(merge: true));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile updated!"), backgroundColor: AppColors.mint),
+            const SnackBar(
+              content: Text("Profile updated!"),
+              backgroundColor: AppColors.mint,
+            ),
           );
           Navigator.pop(context);
         }
@@ -69,13 +72,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     return Scaffold(
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(currentUserId).snapshots(),
+        stream:
+            FirebaseFirestore.instance
+                .collection('users')
+                .doc(currentUserId)
+                .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasData && snapshot.data?.data() != null) {
             final data = snapshot.data!.data() as Map<String, dynamic>;
-            if (_nameController.text.isEmpty) _nameController.text = data['name'] ?? "";
-            if (_aboutController.text.isEmpty) _aboutController.text = data['about'] ?? "";
-            if (_phoneController.text.isEmpty) _phoneController.text = data['phone'] ?? "";
+            if (_nameController.text.isEmpty)
+              _nameController.text = data['name'] ?? "";
+            if (_aboutController.text.isEmpty)
+              _aboutController.text = data['about'] ?? "";
+            if (_phoneController.text.isEmpty)
+              _phoneController.text = data['phone'] ?? "";
             _photoUrl ??= data['photoUrl'];
           }
 
@@ -101,7 +111,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                           ),
-                        )
+                        ),
                       ],
                     ),
                     Expanded(
@@ -130,15 +140,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               child: CircleAvatar(
                                 radius: 50,
                                 backgroundColor: Colors.pink.shade200,
-                                backgroundImage: _photoUrl != null
-                                    ? NetworkImage(_photoUrl!)
-                                    : null,
-                                child: _photoUrl == null
-                                    ? const Icon(
-                                        Icons.person,
-                                        size: 50,
-                                      )
-                                    : null,
+                                backgroundImage:
+                                    _photoUrl != null
+                                        ? NetworkImage(_photoUrl!)
+                                        : null,
+                                child:
+                                    _photoUrl == null
+                                        ? const Icon(Icons.person, size: 50)
+                                        : null,
                               ),
                             ),
                             const SizedBox(height: 30),
@@ -161,7 +170,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             ),
                             const SizedBox(height: 30),
                             GestureDetector(
-                              onTap: _isLoading ? null : () => _saveChanges(authService),
+                              onTap:
+                                  _isLoading
+                                      ? null
+                                      : () => _saveChanges(authService),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 18,
@@ -176,15 +188,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   borderRadius: BorderRadius.circular(24),
                                 ),
                                 alignment: Alignment.center,
-                                child: _isLoading 
-                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                  : const Text(
-                                      "Save Changes",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                                child:
+                                    _isLoading
+                                        ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                        : const Text(
+                                          "Save Changes",
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                               ),
                             ),
                           ],

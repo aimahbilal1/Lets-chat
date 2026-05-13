@@ -44,9 +44,9 @@ class _MessageScreenState extends State<MessageScreen> {
     if (pickedFile == null) return;
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Uploading image...")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Uploading image...")));
 
     final storageService = Provider.of<StorageService>(context, listen: false);
     final chatService = Provider.of<ChatService>(context, listen: false);
@@ -67,16 +67,16 @@ class _MessageScreenState extends State<MessageScreen> {
   }
 
   Future<void> _sendDocumentMessage() async {
-  final result = await FilePicker.pickFiles();
+    final result = await FilePicker.pickFiles();
     if (result == null || result.files.isEmpty) return;
 
     final file = result.files.single;
     if (file.path == null) return;
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Uploading document...")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Uploading document...")));
 
     final storageService = Provider.of<StorageService>(context, listen: false);
     final chatService = Provider.of<ChatService>(context, listen: false);
@@ -111,15 +111,16 @@ class _MessageScreenState extends State<MessageScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
         child: SafeArea(
           child: Column(
             children: [
               // Custom Chat AppBar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
                     IconButton(
@@ -131,7 +132,10 @@ class _MessageScreenState extends State<MessageScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ContactDetailsScreen(userName: widget.userName),
+                            builder:
+                                (context) => ContactDetailsScreen(
+                                  userName: widget.userName,
+                                ),
                           ),
                         );
                       },
@@ -147,31 +151,35 @@ class _MessageScreenState extends State<MessageScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ContactDetailsScreen(
-                                userName: widget.userName,
-                              ),
+                              builder:
+                                  (context) => ContactDetailsScreen(
+                                    userName: widget.userName,
+                                  ),
                             ),
                           );
                         },
                         child: StreamBuilder<DocumentSnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(widget.receiverId)
-                              .snapshots(),
+                          stream:
+                              FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(widget.receiverId)
+                                  .snapshots(),
                           builder: (context, snapshot) {
                             bool isOnline = false;
                             String subtitle = "Offline";
 
-                            if (snapshot.hasData && snapshot.data?.data() != null) {
+                            if (snapshot.hasData &&
+                                snapshot.data?.data() != null) {
                               final data =
                                   snapshot.data!.data() as Map<String, dynamic>;
                               isOnline = data['isOnline'] == true;
                               final lastSeen = data['lastSeen'] as Timestamp?;
-                              subtitle = isOnline
-                                  ? "Online"
-                                  : (lastSeen != null
-                                      ? "Last seen ${lastSeen.toDate().toString().substring(0, 16)}"
-                                      : "Offline");
+                              subtitle =
+                                  isOnline
+                                      ? "Online"
+                                      : (lastSeen != null
+                                          ? "Last seen ${lastSeen.toDate().toString().substring(0, 16)}"
+                                          : "Offline");
                             }
 
                             return Column(
@@ -188,9 +196,10 @@ class _MessageScreenState extends State<MessageScreen> {
                                   subtitle,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: isOnline
-                                        ? Colors.green
-                                        : Colors.black54,
+                                    color:
+                                        isOnline
+                                            ? Colors.green
+                                            : Colors.black54,
                                   ),
                                 ),
                               ],
@@ -214,7 +223,10 @@ class _MessageScreenState extends State<MessageScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ContactDetailsScreen(userName: widget.userName),
+                              builder:
+                                  (context) => ContactDetailsScreen(
+                                    userName: widget.userName,
+                                  ),
                             ),
                           );
                         } else if (value == 'New group') {
@@ -239,10 +251,14 @@ class _MessageScreenState extends State<MessageScreen> {
                             return PopupMenuItem<String>(
                               value: choice,
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(choice),
-                                  const Icon(Icons.arrow_right, color: Colors.black54),
+                                  const Icon(
+                                    Icons.arrow_right,
+                                    color: Colors.black54,
+                                  ),
                                 ],
                               ),
                             );
@@ -261,10 +277,15 @@ class _MessageScreenState extends State<MessageScreen> {
               // Messages List
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: chatService.getMessages(currentUser!.uid, widget.receiverId),
+                  stream: chatService.getMessages(
+                    currentUser!.uid,
+                    widget.receiverId,
+                  ),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
-                      return const Center(child: Text("Error loading messages"));
+                      return const Center(
+                        child: Text("Error loading messages"),
+                      );
                     }
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -273,15 +294,19 @@ class _MessageScreenState extends State<MessageScreen> {
                     final docs = snapshot.data!.docs;
 
                     // Automatically scroll to bottom on new messages
-                    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+                    WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => _scrollToBottom(),
+                    );
 
                     return ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.all(20),
                       itemCount: docs.length,
                       itemBuilder: (context, index) {
-                        Map<String, dynamic> data = docs[index].data() as Map<String, dynamic>;
-                        bool isCurrentUser = data['senderId'] == currentUser.uid;
+                        Map<String, dynamic> data =
+                            docs[index].data() as Map<String, dynamic>;
+                        bool isCurrentUser =
+                            data['senderId'] == currentUser.uid;
 
                         return _messageBubble(data, isCurrentUser);
                       },
@@ -292,7 +317,10 @@ class _MessageScreenState extends State<MessageScreen> {
 
               // Enhanced Input Bar
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 margin: const EdgeInsets.only(left: 10, right: 10, bottom: 10),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.9),
@@ -308,17 +336,26 @@ class _MessageScreenState extends State<MessageScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.black54),
+                      icon: const Icon(
+                        Icons.emoji_emotions_outlined,
+                        color: Colors.black54,
+                      ),
                       onPressed: () {},
                     ),
                     IconButton(
-                      icon: const Icon(Icons.attach_file_outlined, color: Colors.black54),
+                      icon: const Icon(
+                        Icons.attach_file_outlined,
+                        color: Colors.black54,
+                      ),
                       onPressed: () {
                         _showAttachmentMenu(context);
                       },
                     ),
                     IconButton(
-                      icon: const Icon(Icons.camera_alt_outlined, color: Colors.black54),
+                      icon: const Icon(
+                        Icons.camera_alt_outlined,
+                        color: Colors.black54,
+                      ),
                       onPressed: () {
                         _sendImageMessage(ImageSource.camera);
                       },
@@ -346,15 +383,17 @@ class _MessageScreenState extends State<MessageScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          _messageController.text.isEmpty ? Icons.mic_none : Icons.send,
+                          _messageController.text.isEmpty
+                              ? Icons.mic_none
+                              : Icons.send,
                           color: Colors.white,
                           size: 20,
                         ),
                       ),
-                    )
+                    ),
                   ],
                 ),
-              )
+              ),
             ],
           ),
         ),
@@ -366,69 +405,74 @@ class _MessageScreenState extends State<MessageScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: 300,
-        margin: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-        ),
-        child: GridView.count(
-          crossAxisCount: 3,
-          padding: const EdgeInsets.all(20),
-          children: [
-            _attachmentOption(
-              Icons.description,
-              "Document",
-              Colors.indigo,
-              onTap: () async {
-                Navigator.pop(context);
-                await _sendDocumentMessage();
-              },
+      builder:
+          (context) => Container(
+            height: 300,
+            margin: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
             ),
-            _attachmentOption(
-              Icons.image,
-              "Photos",
-              Colors.pink,
-              onTap: () async {
-                Navigator.pop(context);
-                await _sendImageMessage(ImageSource.gallery);
-              },
+            child: GridView.count(
+              crossAxisCount: 3,
+              padding: const EdgeInsets.all(20),
+              children: [
+                _attachmentOption(
+                  Icons.description,
+                  "Document",
+                  Colors.indigo,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _sendDocumentMessage();
+                  },
+                ),
+                _attachmentOption(
+                  Icons.image,
+                  "Photos",
+                  Colors.pink,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _sendImageMessage(ImageSource.gallery);
+                  },
+                ),
+                _attachmentOption(
+                  Icons.camera_alt,
+                  "Camera",
+                  Colors.red,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _sendImageMessage(ImageSource.camera);
+                  },
+                ),
+                _attachmentOption(
+                  Icons.person,
+                  "Contact",
+                  Colors.blue,
+                  onTap: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Contact sharing coming soon"),
+                      ),
+                    );
+                  },
+                ),
+                _attachmentOption(
+                  Icons.location_on,
+                  "Location",
+                  Colors.green,
+                  onTap: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Location sharing coming soon"),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-            _attachmentOption(
-              Icons.camera_alt,
-              "Camera",
-              Colors.red,
-              onTap: () async {
-                Navigator.pop(context);
-                await _sendImageMessage(ImageSource.camera);
-              },
-            ),
-            _attachmentOption(
-              Icons.person,
-              "Contact",
-              Colors.blue,
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Contact sharing coming soon")),
-                );
-              },
-            ),
-            _attachmentOption(
-              Icons.location_on,
-              "Location",
-              Colors.green,
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Location sharing coming soon")),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -460,8 +504,7 @@ class _MessageScreenState extends State<MessageScreen> {
     final String? mediaUrl = data['mediaUrl'];
     final String? fileName = data['fileName'];
 
-    final bubbleColor =
-        isCurrentUser ? Colors.green.shade300 : Colors.white;
+    final bubbleColor = isCurrentUser ? Colors.green.shade300 : Colors.white;
     final textColor = isCurrentUser ? Colors.white : Colors.black87;
 
     Widget content;

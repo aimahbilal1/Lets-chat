@@ -38,8 +38,7 @@ class LetsChatApp extends StatefulWidget {
   State<LetsChatApp> createState() => _LetsChatAppState();
 }
 
-class _LetsChatAppState extends State<LetsChatApp>
-    with WidgetsBindingObserver {
+class _LetsChatAppState extends State<LetsChatApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
