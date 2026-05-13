@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../widgets/bottom_nav.dart';
@@ -13,6 +14,8 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+    final String currentUserId = authService.user?.uid ?? "";
 
     return Scaffold(
       body: Container(
@@ -27,32 +30,75 @@ class SettingsScreen extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                CircleAvatar(
-                  radius: 45,
-                  backgroundColor: Colors.pink.shade200,
-                  child: const Icon(
-                    Icons.person,
-                    size: 45,
-                  ),
+                StreamBuilder<DocumentSnapshot>(
+                  stream: currentUserId.isNotEmpty
+                      ? FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(currentUserId)
+                          .snapshots()
+                      : const Stream.empty(),
+                  builder: (context, snapshot) {
+                    String? photoUrl;
+                    if (snapshot.hasData && snapshot.data?.data() != null) {
+                      final data = snapshot.data!.data() as Map<String, dynamic>;
+                      photoUrl = data['photoUrl'];
+                    }
+                    return CircleAvatar(
+                      radius: 45,
+                      backgroundColor: Colors.pink.shade200,
+                      backgroundImage:
+                          photoUrl != null ? NetworkImage(photoUrl) : null,
+                      child: photoUrl == null
+                          ? const Icon(
+                              Icons.person,
+                              size: 45,
+                            )
+                          : null,
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 16),
 
-                const Text(
-                  "Elena Rossi",
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                StreamBuilder<DocumentSnapshot>(
+                  stream: currentUserId.isNotEmpty
+                      ? FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(currentUserId)
+                          .snapshots()
+                      : const Stream.empty(),
+                  builder: (context, snapshot) {
+                    String displayName =
+                        authService.user?.displayName ?? "User";
+                    String about = "Digital lifestyle enthusiast";
 
-                const SizedBox(height: 6),
+                    if (snapshot.hasData && snapshot.data?.data() != null) {
+                      final data =
+                          snapshot.data!.data() as Map<String, dynamic>;
+                      displayName =
+                          data['name'] ?? displayName;
+                      about = data['about'] ?? about;
+                    }
 
-                Text(
-                  "Digital lifestyle enthusiast",
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                  ),
+                    return Column(
+                      children: [
+                        Text(
+                          displayName,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          about,
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 18),

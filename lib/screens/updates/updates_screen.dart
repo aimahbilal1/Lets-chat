@@ -1,14 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
 import '../../core/services/chat_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../widgets/bottom_nav.dart';
-import '../calls/calls_screen.dart';
-import '../chats/chats_screen.dart';
 
 class UpdatesScreen extends StatelessWidget {
   const UpdatesScreen({super.key});
@@ -124,8 +123,24 @@ class UpdatesScreen extends StatelessWidget {
                               final String name = data['userName'];
                               final String time = (data['timestamp'] as Timestamp?)?.toDate().toString().substring(11, 16) ?? "Recently";
                               final String statusText = data['statusText'] ?? "No status message";
+                              final List likes = List.from(data['likes'] ?? []);
+                              final currentUser = FirebaseAuth.instance.currentUser;
+                              final bool isLiked = currentUser != null && likes.contains(currentUser.uid);
+                              final likeCount = likes.length;
                               
-                              return _statusItem(context, name, statusText, "Today, $time", Colors.pink.shade100);
+                              return _statusItem(
+                                context,
+                                name,
+                                statusText,
+                                "Today, $time",
+                                Colors.pink.shade100,
+                                isLiked: isLiked,
+                                likeCount: likeCount,
+                                onLike: () => chatService.toggleStatusLike(doc.id),
+                                onReply: () => ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Reply coming soon")),
+                                ),
+                              );
                             }).toList(),
                           );
                         }
@@ -143,7 +158,17 @@ class UpdatesScreen extends StatelessWidget {
     );
   }
 
-  Widget _statusItem(BuildContext context, String name, String status, String time, Color color) {
+  Widget _statusItem(
+    BuildContext context,
+    String name,
+    String status,
+    String time,
+    Color color, {
+    required bool isLiked,
+    required int likeCount,
+    required VoidCallback onLike,
+    required VoidCallback onReply,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(15),
@@ -189,11 +214,22 @@ class UpdatesScreen extends StatelessWidget {
                 const SizedBox(height: 15),
                 Row(
                   children: [
-                    _reactionButton(Icons.favorite_border, "Like"),
+                    _reactionButton(
+                      isLiked ? Icons.favorite : Icons.favorite_border,
+                      likeCount > 0 ? "Like ($likeCount)" : "Like",
+                      onTap: onLike,
+                      color: isLiked ? Colors.red : null,
+                    ),
                     const SizedBox(width: 20),
-                    _reactionButton(Icons.reply_outlined, "Reply"),
+                    _reactionButton(Icons.reply_outlined, "Reply", onTap: onReply),
                     const SizedBox(width: 20),
-                    _reactionButton(Icons.repeat_outlined, "Repost"),
+                    _reactionButton(
+                      Icons.repeat_outlined,
+                      "Repost",
+                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Repost coming soon")),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -295,13 +331,21 @@ class UpdatesScreen extends StatelessWidget {
     );
   }
 
-  Widget _reactionButton(IconData icon, String label) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: Colors.black54),
-        const SizedBox(width: 5),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-      ],
+  Widget _reactionButton(
+    IconData icon,
+    String label, {
+    VoidCallback? onTap,
+    Color? color,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color ?? Colors.black54),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        ],
+      ),
     );
   }
 }

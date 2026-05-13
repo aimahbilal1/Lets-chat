@@ -1,10 +1,15 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
 import '../../core/services/chat_service.dart';
+import '../../core/services/storage_service.dart';
 import 'contact_details_screen.dart';
+import 'create_group_screen.dart';
 
 class MessageScreen extends StatefulWidget {
   final String userName;
@@ -29,6 +34,62 @@ class _MessageScreenState extends State<MessageScreen> {
       final chatService = Provider.of<ChatService>(context, listen: false);
       await chatService.sendMessage(widget.receiverId, _messageController.text);
       _messageController.clear();
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _sendImageMessage(ImageSource source) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: source, imageQuality: 75);
+    if (pickedFile == null) return;
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Uploading image...")),
+    );
+
+    final storageService = Provider.of<StorageService>(context, listen: false);
+    final chatService = Provider.of<ChatService>(context, listen: false);
+    final url = await storageService.uploadFile(
+      File(pickedFile.path),
+      'chat_images',
+    );
+
+    if (url != null) {
+      await chatService.sendMessage(
+        widget.receiverId,
+        'Photo',
+        type: 'image',
+        mediaUrl: url,
+      );
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _sendDocumentMessage() async {
+  final result = await FilePicker.pickFiles();
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.single;
+    if (file.path == null) return;
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Uploading document...")),
+    );
+
+    final storageService = Provider.of<StorageService>(context, listen: false);
+    final chatService = Provider.of<ChatService>(context, listen: false);
+    final url = await storageService.uploadFile(File(file.path!), 'chat_docs');
+
+    if (url != null) {
+      await chatService.sendMessage(
+        widget.receiverId,
+        file.name,
+        type: 'doc',
+        mediaUrl: url,
+        fileName: file.name,
+      );
       _scrollToBottom();
     }
   }
@@ -86,28 +147,55 @@ class _MessageScreenState extends State<MessageScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ContactDetailsScreen(userName: widget.userName),
+                              builder: (context) => ContactDetailsScreen(
+                                userName: widget.userName,
+                              ),
                             ),
                           );
                         },
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.userName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const Text(
-                              "Online",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
-                              ),
-                            ),
-                          ],
+                        child: StreamBuilder<DocumentSnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(widget.receiverId)
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            bool isOnline = false;
+                            String subtitle = "Offline";
+
+                            if (snapshot.hasData && snapshot.data?.data() != null) {
+                              final data =
+                                  snapshot.data!.data() as Map<String, dynamic>;
+                              isOnline = data['isOnline'] == true;
+                              final lastSeen = data['lastSeen'] as Timestamp?;
+                              subtitle = isOnline
+                                  ? "Online"
+                                  : (lastSeen != null
+                                      ? "Last seen ${lastSeen.toDate().toString().substring(0, 16)}"
+                                      : "Offline");
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.userName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isOnline
+                                        ? Colors.green
+                                        : Colors.black54,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -127,6 +215,13 @@ class _MessageScreenState extends State<MessageScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => ContactDetailsScreen(userName: widget.userName),
+                            ),
+                          );
+                        } else if (value == 'New group') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CreateGroupScreen(),
                             ),
                           );
                         }
@@ -188,9 +283,7 @@ class _MessageScreenState extends State<MessageScreen> {
                         Map<String, dynamic> data = docs[index].data() as Map<String, dynamic>;
                         bool isCurrentUser = data['senderId'] == currentUser.uid;
 
-                        return isCurrentUser
-                            ? rightBubble(data['message'])
-                            : leftBubble(data['message']);
+                        return _messageBubble(data, isCurrentUser);
                       },
                     );
                   },
@@ -226,7 +319,9 @@ class _MessageScreenState extends State<MessageScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.camera_alt_outlined, color: Colors.black54),
-                      onPressed: () {},
+                      onPressed: () {
+                        _sendImageMessage(ImageSource.camera);
+                      },
                     ),
                     Expanded(
                       child: TextField(
@@ -282,64 +377,143 @@ class _MessageScreenState extends State<MessageScreen> {
           crossAxisCount: 3,
           padding: const EdgeInsets.all(20),
           children: [
-            _attachmentOption(Icons.description, "Document", Colors.indigo),
-            _attachmentOption(Icons.image, "Photos", Colors.pink),
-            _attachmentOption(Icons.camera_alt, "Camera", Colors.red),
-            _attachmentOption(Icons.person, "Contact", Colors.blue),
-            _attachmentOption(Icons.location_on, "Location", Colors.green),
+            _attachmentOption(
+              Icons.description,
+              "Document",
+              Colors.indigo,
+              onTap: () async {
+                Navigator.pop(context);
+                await _sendDocumentMessage();
+              },
+            ),
+            _attachmentOption(
+              Icons.image,
+              "Photos",
+              Colors.pink,
+              onTap: () async {
+                Navigator.pop(context);
+                await _sendImageMessage(ImageSource.gallery);
+              },
+            ),
+            _attachmentOption(
+              Icons.camera_alt,
+              "Camera",
+              Colors.red,
+              onTap: () async {
+                Navigator.pop(context);
+                await _sendImageMessage(ImageSource.camera);
+              },
+            ),
+            _attachmentOption(
+              Icons.person,
+              "Contact",
+              Colors.blue,
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Contact sharing coming soon")),
+                );
+              },
+            ),
+            _attachmentOption(
+              Icons.location_on,
+              "Location",
+              Colors.green,
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Location sharing coming soon")),
+                );
+              },
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _attachmentOption(IconData icon, String label, Color color) {
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 25,
-          backgroundColor: color.withOpacity(0.2),
-          child: Icon(icon, color: color),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ],
-    );
-  }
-
-  Widget leftBubble(String text) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        constraints: const BoxConstraints(maxWidth: 260),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Text(text),
+  Widget _attachmentOption(
+    IconData icon,
+    String label,
+    Color color, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 25,
+            backgroundColor: color.withOpacity(0.2),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 12)),
+        ],
       ),
     );
   }
 
-  Widget rightBubble(String text) {
+  Widget _messageBubble(Map<String, dynamic> data, bool isCurrentUser) {
+    final String type = data['messageType'] ?? 'text';
+    final String text = data['message'] ?? '';
+    final String? mediaUrl = data['mediaUrl'];
+    final String? fileName = data['fileName'];
+
+    final bubbleColor =
+        isCurrentUser ? Colors.green.shade300 : Colors.white;
+    final textColor = isCurrentUser ? Colors.white : Colors.black87;
+
+    Widget content;
+    if (type == 'image' && mediaUrl != null) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.network(
+              mediaUrl,
+              width: 220,
+              height: 160,
+              fit: BoxFit.cover,
+            ),
+          ),
+          if (text.isNotEmpty && text != 'Photo') ...[
+            const SizedBox(height: 8),
+            Text(text, style: TextStyle(color: textColor)),
+          ],
+        ],
+      );
+    } else if (type == 'doc' && mediaUrl != null) {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.description, color: textColor),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              fileName ?? text,
+              style: TextStyle(color: textColor),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    } else {
+      content = Text(text, style: TextStyle(color: textColor));
+    }
+
     return Align(
-      alignment: Alignment.centerRight,
+      alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
         constraints: const BoxConstraints(maxWidth: 260),
         decoration: BoxDecoration(
-          color: Colors.green.shade300,
+          color: bubbleColor,
           borderRadius: BorderRadius.circular(22),
         ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-          ),
-        ),
+        child: content,
       ),
     );
   }

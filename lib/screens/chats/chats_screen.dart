@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +11,8 @@ import '../../widgets/bottom_nav.dart';
 import '../../widgets/chat_tile.dart';
 import 'message_screen.dart';
 import 'new_message_screen.dart';
+import 'create_group_screen.dart';
+import 'group_message_screen.dart';
 import '../community/community_screen.dart';
 import '../settings/settings_detail_screen.dart';
 
@@ -34,18 +37,31 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Future<void> _takePhoto() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.camera);
-    
+
     if (pickedFile != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Uploading photo...")));
-      
-      final storageService = Provider.of<StorageService>(context, listen: false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Uploading photo...")));
+
+      final storageService = Provider.of<StorageService>(
+        context,
+        listen: false,
+      );
       final chatService = Provider.of<ChatService>(context, listen: false);
-      
-      final url = await storageService.uploadFile(File(pickedFile.path), 'status_images');
+
+      final url = await storageService.uploadFile(
+        File(pickedFile.path),
+        'status_images',
+      );
       if (url != null) {
         await chatService.postStatus(url, 'image');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Status updated with photo!"), backgroundColor: AppColors.mint));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Status updated with photo!"),
+              backgroundColor: AppColors.mint,
+            ),
+          );
         }
       }
     }
@@ -58,15 +74,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
         child: SafeArea(
           child: Column(
             children: [
               // Custom AppBar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -90,19 +107,37 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const SettingsDetailScreen(title: "Starred Messages"),
+                                  builder:
+                                      (_) => const SettingsDetailScreen(
+                                        title: "Starred Messages",
+                                      ),
                                 ),
                               );
                             } else if (value == "New community") {
                               // Navigate to community tab
-                              // We can't easily switch tabs from here without a controller, 
+                              // We can't easily switch tabs from here without a controller,
                               // but we can push the screen directly or use a shared state.
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const CommunityScreen()),
+                                MaterialPageRoute(
+                                  builder: (_) => const CommunityScreen(),
+                                ),
                               );
                             } else if (value == "New group") {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Group creation feature coming soon!")));
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CreateGroupScreen(),
+                                ),
+                              );
+                            } else if (value == "Linked devices") {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "Linked devices coming soon",
+                                  ),
+                                ),
+                              );
                             }
                           },
                           itemBuilder: (BuildContext context) {
@@ -110,7 +145,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               'New group',
                               'New community',
                               'Linked devices',
-                              'Starred'
+                              'Starred',
                             ].map((String choice) {
                               return PopupMenuItem<String>(
                                 value: choice,
@@ -120,7 +155,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           },
                         ),
                       ],
-                    )
+                    ),
                   ],
                 ),
               ),
@@ -165,17 +200,32 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               },
                               child: Container(
                                 margin: const EdgeInsets.only(right: 10),
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 8,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? Colors.black.withOpacity(0.1) : Colors.white.withOpacity(0.5),
+                                  color:
+                                      isSelected
+                                          ? Colors.black.withOpacity(0.1)
+                                          : Colors.white.withOpacity(0.5),
                                   borderRadius: BorderRadius.circular(20),
-                                  border: isSelected ? Border.all(color: Colors.black26) : null,
+                                  border:
+                                      isSelected
+                                          ? Border.all(color: Colors.black26)
+                                          : null,
                                 ),
                                 child: Text(
                                   filters[index],
                                   style: TextStyle(
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    color: isSelected ? Colors.black : Colors.black54,
+                                    fontWeight:
+                                        isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                    color:
+                                        isSelected
+                                            ? Colors.black
+                                            : Colors.black54,
                                   ),
                                 ),
                               ),
@@ -187,96 +237,145 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
                       // Chat List
                       Expanded(
-                        child: StreamBuilder<List<Map<String, dynamic>>>(
-                          stream: _searchController.text.isNotEmpty
-                              ? chatService.searchUsers(_searchController.text)
-                              : chatService.getUsersStream(),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasError) {
-                              debugPrint('[ChatsScreen] users stream error: ${snapshot.error}');
-                              return Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.error_outline, color: Colors.red, size: 40),
-                                    const SizedBox(height: 10),
-                                    const Text("Error loading chats"),
-                                    Text(snapshot.error.toString(), style: const TextStyle(fontSize: 10, color: Colors.black45)),
-                                    const SizedBox(height: 10),
-                                    TextButton(onPressed: () => setState(() {}), child: const Text("Retry")),
-                                  ],
-                                ),
-                              );
-                            }
-                            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                        child: selectedFilter == "Groups"
+                            ? StreamBuilder<QuerySnapshot>(
+                              stream: chatService.getGroupsStream(),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasError) {
+                                  return const Center(child: Text("Error loading groups"));
+                                }
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return const Center(child: CircularProgressIndicator());
+                                }
 
-                            final data = snapshot.data ?? [];
-                            var users = data
-                                .where((user) => user['uid'] != currentUser?.uid)
-                                .toList();
+                                final groups = snapshot.data?.docs ?? [];
+                                if (groups.isEmpty) {
+                                  return const Center(
+                                    child: Text("No groups yet. Create one!"),
+                                  );
+                                }
 
-                            if (users.isEmpty) {
-                              return const Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.chat_bubble_outline, size: 50, color: Colors.grey),
-                                    SizedBox(height: 10),
-                                    Text("No chats found. Start a new conversation!"),
-                                  ],
-                                ),
-                              );
-                            }
+                                return ListView.builder(
+                                  itemCount: groups.length,
+                                  itemBuilder: (context, index) {
+                                    final data =
+                                        groups[index].data() as Map<String, dynamic>;
+                                    final name = data['name'] ?? "Group";
+                                    final lastMessage =
+                                        data['lastMessage'] ?? "Start chatting";
 
-                            return ListView.builder(
-                              itemCount: users.length,
-                              itemBuilder: (context, index) {
-                                final user = users[index];
-                                final String email = user['email'] ?? "User";
-                                final String name = email.contains('@') ? email.split('@')[0] : email;
-                                
-                                return ChatTile(
-                                  name: name,
-                                  message: user['about'] ?? "Tap to chat",
-                                  time: "Now",
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => MessageScreen(
-                                          userName: name,
-                                          receiverId: user['uid'],
-                                        ),
-                                      ),
+                                    return ChatTile(
+                                      name: name,
+                                      message: lastMessage,
+                                      time: "Now",
+                                      leadingIcon: Icons.group,
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => GroupMessageScreen(
+                                              groupId: groups[index].id,
+                                              groupName: name,
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     );
                                   },
                                 );
                               },
-                            );
-                          },
-                        ),
+                            )
+                            : StreamBuilder<List<Map<String, dynamic>>>(
+                              stream: _searchController.text.isNotEmpty
+                                  ? chatService.searchUsers(_searchController.text)
+                                  : chatService.getUsersStream(),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasError) {
+                                  debugPrint('[ChatsScreen] users stream error: ${snapshot.error}');
+                                  return Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                                        const SizedBox(height: 10),
+                                        const Text("Error loading chats"),
+                                        Text(snapshot.error.toString(), style: const TextStyle(fontSize: 10, color: Colors.black45)),
+                                        const SizedBox(height: 10),
+                                        TextButton(onPressed: () => setState(() {}), child: const Text("Retry")),
+                                      ],
+                                    ),
+                                  );
+                                }
+                                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+
+                                final data = snapshot.data ?? [];
+                                var users = data
+                                    .where((user) => user['uid'] != currentUser?.uid)
+                                    .toList();
+
+                                if (users.isEmpty) {
+                                  return const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.chat_bubble_outline, size: 50, color: Colors.grey),
+                                        SizedBox(height: 10),
+                                        Text("No chats found. Start a new conversation!"),
+                                      ],
+                                    ),
+                                  );
+                                }
+
+                                return ListView.builder(
+                                  itemCount: users.length,
+                                  itemBuilder: (context, index) {
+                                    final user = users[index];
+                                    final String email = user['email'] ?? "User";
+                                    final String name = email.contains('@') ? email.split('@')[0] : email;
+
+                                    return ChatTile(
+                                      name: name,
+                                      message: user['about'] ?? "Tap to chat",
+                                      time: "Now",
+                                      avatarText: name.isNotEmpty
+                                          ? name[0].toUpperCase()
+                                          : null,
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => MessageScreen(
+                                              userName: name,
+                                              receiverId: user['uid'],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                       ),
                     ],
                   ),
                 ),
               ),
 
-              const BottomNav(
-                currentIndex: 3,
-              ),
+              const BottomNav(currentIndex: 3),
             ],
           ),
         ),
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 90), // Move up to avoid overlap with BottomNav
+        padding: const EdgeInsets.only(
+          bottom: 90,
+        ), // Move up to avoid overlap with BottomNav
         child: FloatingActionButton(
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const NewMessageScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const NewMessageScreen()),
             );
           },
           backgroundColor: AppColors.mint,

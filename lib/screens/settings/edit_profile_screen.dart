@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/app_colors.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/storage_service.dart';
 import '../../widgets/custom_textfield.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -16,6 +19,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _aboutController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  String? _photoUrl;
   bool _isLoading = false;
 
   @override
@@ -31,11 +35,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final user = authService.user;
       if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'email': user.email,
           'name': _nameController.text,
           'about': _aboutController.text,
           'phone': _phoneController.text,
-        });
+          'photoUrl': _photoUrl,
+        }, SetOptions(merge: true));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Profile updated!"), backgroundColor: AppColors.mint),
@@ -57,6 +64,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
+    final storageService = Provider.of<StorageService>(context, listen: false);
     final String currentUserId = authService.user?.uid ?? "";
 
     return Scaffold(
@@ -68,6 +76,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             if (_nameController.text.isEmpty) _nameController.text = data['name'] ?? "";
             if (_aboutController.text.isEmpty) _aboutController.text = data['about'] ?? "";
             if (_phoneController.text.isEmpty) _phoneController.text = data['phone'] ?? "";
+            _photoUrl ??= data['photoUrl'];
           }
 
           return Container(
@@ -99,12 +108,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor: Colors.pink.shade200,
-                              child: const Icon(
-                                Icons.person,
-                                size: 50,
+                            GestureDetector(
+                              onTap: () async {
+                                final picker = ImagePicker();
+                                final picked = await picker.pickImage(
+                                  source: ImageSource.gallery,
+                                  imageQuality: 75,
+                                );
+                                if (picked == null) return;
+
+                                setState(() => _isLoading = true);
+                                final url = await storageService.uploadFile(
+                                  File(picked.path),
+                                  'profile_photos',
+                                );
+                                if (url != null) {
+                                  setState(() => _photoUrl = url);
+                                }
+                                if (mounted) setState(() => _isLoading = false);
+                              },
+                              child: CircleAvatar(
+                                radius: 50,
+                                backgroundColor: Colors.pink.shade200,
+                                backgroundImage: _photoUrl != null
+                                    ? NetworkImage(_photoUrl!)
+                                    : null,
+                                child: _photoUrl == null
+                                    ? const Icon(
+                                        Icons.person,
+                                        size: 50,
+                                      )
+                                    : null,
                               ),
                             ),
                             const SizedBox(height: 30),
@@ -166,4 +200,4 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
     );
   }
-}
+}

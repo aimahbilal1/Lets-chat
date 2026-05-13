@@ -5,6 +5,8 @@ class MessageModel {
   final String senderEmail;
   final String receiverId;
   final String message;
+  final String? mediaUrl;
+  final String? fileName;
   final Timestamp timestamp;
   final bool isRead;
   final bool isStarred;
@@ -15,6 +17,8 @@ class MessageModel {
     required this.senderEmail,
     required this.receiverId,
     required this.message,
+  this.mediaUrl,
+  this.fileName,
     required this.timestamp,
     this.isRead = false,
     this.isStarred = false,
@@ -27,6 +31,8 @@ class MessageModel {
       'senderEmail': senderEmail,
       'receiverId': receiverId,
       'message': message,
+  'mediaUrl': mediaUrl,
+  'fileName': fileName,
       'timestamp': timestamp,
       'isRead': isRead,
       'isStarred': isStarred,
@@ -40,6 +46,8 @@ class MessageModel {
       senderEmail: map['senderEmail'],
       receiverId: map['receiverId'],
       message: map['message'],
+  mediaUrl: map['mediaUrl'],
+  fileName: map['fileName'],
       timestamp: map['timestamp'],
       isRead: map['isRead'] ?? false,
       isStarred: map['isStarred'] ?? false,

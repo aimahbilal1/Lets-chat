@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'core/app_theme.dart';
 import 'firebase_options.dart';
@@ -29,8 +31,48 @@ void main() async {
   runApp(const LetsChatApp());
 }
 
-class LetsChatApp extends StatelessWidget {
+class LetsChatApp extends StatefulWidget {
   const LetsChatApp({super.key});
+
+  @override
+  State<LetsChatApp> createState() => _LetsChatAppState();
+}
+
+class _LetsChatAppState extends State<LetsChatApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _setPresence(isOnline: true);
+  }
+
+  Future<void> _setPresence({required bool isOnline}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'isOnline': isOnline,
+      'lastSeen': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _setPresence(isOnline: true);
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.inactive) {
+      _setPresence(isOnline: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _setPresence(isOnline: false);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

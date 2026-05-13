@@ -15,7 +15,13 @@ class ChatService extends ChangeNotifier {
   }
 
   // Send message
-  Future<void> sendMessage(String receiverId, String message, {String type = 'text'}) async {
+  Future<void> sendMessage(
+    String receiverId,
+    String message, {
+    String type = 'text',
+    String? mediaUrl,
+    String? fileName,
+  }) async {
     try {
       final String currentUserId = _auth.currentUser!.uid;
       final String currentUserEmail = _auth.currentUser!.email.toString();
@@ -26,6 +32,8 @@ class ChatService extends ChangeNotifier {
         senderEmail: currentUserEmail,
         receiverId: receiverId,
         message: message,
+        mediaUrl: mediaUrl,
+        fileName: fileName,
         timestamp: timestamp,
         messageType: type,
       );
@@ -68,7 +76,11 @@ class ChatService extends ChangeNotifier {
   }
 
   // Toggle star message
-  Future<void> toggleStarMessage(String chatRoomId, String messageId, bool isStarred) async {
+  Future<void> toggleStarMessage(
+    String chatRoomId,
+    String messageId,
+    bool isStarred,
+  ) async {
     try {
       await _firestore
           .collection('chat_rooms')
@@ -110,35 +122,125 @@ class ChatService extends ChangeNotifier {
     ids.sort();
     String chatRoomId = ids.join("_");
 
-  return _firestore
+    return _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
         .collection('messages')
         .orderBy('timestamp', descending: false)
-    .snapshots()
-    .handleError((error, stack) => _logError('getMessages', error, stack));
+        .snapshots()
+        .handleError((error, stack) => _logError('getMessages', error, stack));
+  }
+
+  Future<String?> createGroup(String name, List<String> memberIds) async {
+    try {
+      final String currentUserId = _auth.currentUser!.uid;
+      final Set<String> members = {...memberIds, currentUserId};
+      final doc = _firestore.collection('groups').doc();
+
+      await doc.set({
+        'name': name,
+        'members': members.toList(),
+        'createdBy': currentUserId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastMessage': 'Group created',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+      });
+
+      await doc.collection('messages').add({
+        'senderId': currentUserId,
+        'senderEmail': _auth.currentUser!.email,
+        'message': 'Group created',
+        'timestamp': FieldValue.serverTimestamp(),
+        'messageType': 'system',
+      });
+
+      return doc.id;
+    } catch (e, st) {
+      _logError('createGroup', e, st);
+      rethrow;
+    }
+  }
+
+  Stream<QuerySnapshot> getGroupsStream() {
+    final String currentUserId = _auth.currentUser!.uid;
+    return _firestore
+        .collection('groups')
+        .where('members', arrayContains: currentUserId)
+        .snapshots()
+        .handleError((error, stack) => _logError('getGroupsStream', error, stack));
+  }
+
+  Stream<QuerySnapshot> getGroupMessages(String groupId) {
+    return _firestore
+        .collection('groups')
+        .doc(groupId)
+        .collection('messages')
+        .orderBy('timestamp', descending: false)
+        .snapshots()
+        .handleError((error, stack) => _logError('getGroupMessages', error, stack));
+  }
+
+  Future<void> sendGroupMessage(
+    String groupId,
+    String message, {
+    String type = 'text',
+    String? mediaUrl,
+    String? fileName,
+  }) async {
+    try {
+      final String currentUserId = _auth.currentUser!.uid;
+      final String currentUserEmail = _auth.currentUser!.email ?? 'user';
+      final Timestamp timestamp = Timestamp.now();
+
+      await _firestore
+          .collection('groups')
+          .doc(groupId)
+          .collection('messages')
+          .add({
+        'senderId': currentUserId,
+        'senderEmail': currentUserEmail,
+        'message': message,
+        'mediaUrl': mediaUrl,
+        'fileName': fileName,
+        'timestamp': timestamp,
+        'messageType': type,
+      });
+
+      await _firestore.collection('groups').doc(groupId).set({
+        'lastMessage': message,
+        'lastMessageTime': timestamp,
+      }, SetOptions(merge: true));
+    } catch (e, st) {
+      _logError('sendGroupMessage', e, st);
+      rethrow;
+    }
   }
 
   // Get users stream for the chat list
   Stream<List<Map<String, dynamic>>> getUsersStream() {
-    return _firestore.collection('users').snapshots().handleError(
-        (error, stack) => _logError('getUsersStream', error, stack)).map(
-      (snapshot) {
-        return snapshot.docs.map((doc) {
-          final user = doc.data();
-          return user;
-        }).toList();
-      },
-    );
+    return _firestore
+        .collection('users')
+        .snapshots()
+        .handleError(
+          (error, stack) => _logError('getUsersStream', error, stack),
+        )
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final user = doc.data();
+            return user;
+          }).toList();
+        });
   }
 
   // Get starred messages for current user
   Stream<QuerySnapshot> getStarredMessages() {
-  return _firestore
+    return _firestore
         .collectionGroup('messages')
         .where('isStarred', isEqualTo: true)
-    .snapshots()
-    .handleError((error, stack) => _logError('getStarredMessages', error, stack));
+        .snapshots()
+        .handleError(
+          (error, stack) => _logError('getStarredMessages', error, stack),
+        );
   }
 
   // Perform chat backup (mock logic - updating timestamp)
@@ -170,16 +272,57 @@ class ChatService extends ChangeNotifier {
   // Get call logs for current user
   Stream<QuerySnapshot> getCallLogs() {
     final String currentUserId = _auth.currentUser!.uid;
-  return _firestore
+    return _firestore
         .collection('calls')
         .where('users', arrayContains: currentUserId)
         .orderBy('timestamp', descending: true)
-    .snapshots()
-    .handleError((error, stack) => _logError('getCallLogs', error, stack));
+        .snapshots()
+        .handleError((error, stack) => _logError('getCallLogs', error, stack));
+  }
+
+  Stream<QuerySnapshot> getScheduledCalls() {
+    final String currentUserId = _auth.currentUser!.uid;
+    return _firestore
+        .collection('call_schedules')
+        .where('users', arrayContains: currentUserId)
+        .orderBy('scheduledAt', descending: false)
+        .snapshots()
+        .handleError(
+          (error, stack) => _logError('getScheduledCalls', error, stack),
+        );
+  }
+
+  Future<void> scheduleCall(
+    String receiverId,
+    String receiverName,
+    DateTime scheduledAt,
+  ) async {
+    try {
+      final String currentUserId = _auth.currentUser!.uid;
+      final String currentUserName = _auth.currentUser!.displayName ?? "User";
+
+      await _firestore.collection('call_schedules').add({
+        'users': [currentUserId, receiverId],
+        'callerId': currentUserId,
+        'receiverId': receiverId,
+        'callerName': currentUserName,
+        'receiverName': receiverName,
+        'scheduledAt': Timestamp.fromDate(scheduledAt),
+        'status': 'scheduled',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e, st) {
+      _logError('scheduleCall', e, st);
+      rethrow;
+    }
   }
 
   // Start/Log a call
-  Future<void> logCall(String receiverId, String receiverName, String type) async {
+  Future<void> logCall(
+    String receiverId,
+    String receiverName,
+    String type,
+  ) async {
     try {
       final String currentUserId = _auth.currentUser!.uid;
       final String currentUserName = _auth.currentUser!.displayName ?? "User";
@@ -204,10 +347,11 @@ class ChatService extends ChangeNotifier {
   Future<void> clearCallLog() async {
     try {
       final String currentUserId = _auth.currentUser!.uid;
-      final snapshot = await _firestore
-          .collection('calls')
-          .where('users', arrayContains: currentUserId)
-          .get();
+      final snapshot =
+          await _firestore
+              .collection('calls')
+              .where('users', arrayContains: currentUserId)
+              .get();
 
       for (var doc in snapshot.docs) {
         await doc.reference.delete();
@@ -222,7 +366,9 @@ class ChatService extends ChangeNotifier {
   Future<void> joinCommunity(String communityName) async {
     try {
       final String currentUserId = _auth.currentUser!.uid;
-      final communityDoc = _firestore.collection('communities').doc(communityName);
+      final communityDoc = _firestore
+          .collection('communities')
+          .doc(communityName);
 
       await communityDoc.set({
         'name': communityName,
@@ -236,15 +382,21 @@ class ChatService extends ChangeNotifier {
 
   // Get status updates
   Stream<QuerySnapshot> getStatusUpdates() {
-  return _firestore
+    return _firestore
         .collection('status')
         .orderBy('timestamp', descending: true)
-    .snapshots()
-    .handleError((error, stack) => _logError('getStatusUpdates', error, stack));
+        .snapshots()
+        .handleError(
+          (error, stack) => _logError('getStatusUpdates', error, stack),
+        );
   }
 
   // Post a status update (media or text)
-  Future<void> postStatus(String? mediaUrl, String type, {String? statusText}) async {
+  Future<void> postStatus(
+    String? mediaUrl,
+    String type, {
+    String? statusText,
+  }) async {
     try {
       final String currentUserId = _auth.currentUser!.uid;
       final String currentUserName = _auth.currentUser!.displayName ?? "User";
@@ -257,9 +409,32 @@ class ChatService extends ChangeNotifier {
         'type': type,
         'timestamp': FieldValue.serverTimestamp(),
         'viewers': [],
+        'likes': [],
       });
     } catch (e, st) {
       _logError('postStatus', e, st);
+      rethrow;
+    }
+  }
+
+  Future<void> toggleStatusLike(String statusId) async {
+    try {
+      final String currentUserId = _auth.currentUser!.uid;
+      final doc = _firestore.collection('status').doc(statusId);
+      final snapshot = await doc.get();
+      final data = snapshot.data() ?? {};
+      final List likes = List.from(data['likes'] ?? []);
+      if (likes.contains(currentUserId)) {
+        await doc.update({
+          'likes': FieldValue.arrayRemove([currentUserId]),
+        });
+      } else {
+        await doc.update({
+          'likes': FieldValue.arrayUnion([currentUserId]),
+        });
+      }
+    } catch (e, st) {
+      _logError('toggleStatusLike', e, st);
       rethrow;
     }
   }
@@ -269,7 +444,9 @@ class ChatService extends ChangeNotifier {
     return _firestore
         .collection('communities')
         .snapshots()
-        .handleError((error, stack) => _logError('getCommunitiesStream', error, stack));
+        .handleError(
+          (error, stack) => _logError('getCommunitiesStream', error, stack),
+        );
   }
 
   // Search communities
@@ -279,6 +456,8 @@ class ChatService extends ChangeNotifier {
         .where('name', isGreaterThanOrEqualTo: query)
         .where('name', isLessThanOrEqualTo: query + '\uf8ff')
         .snapshots()
-        .handleError((error, stack) => _logError('searchCommunities', error, stack));
+        .handleError(
+          (error, stack) => _logError('searchCommunities', error, stack),
+        );
   }
 }

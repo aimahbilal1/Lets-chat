@@ -5,6 +5,9 @@ class ChatTile extends StatelessWidget {
   final String message;
   final String time;
   final VoidCallback onTap;
+  final IconData? leadingIcon;
+  final String? avatarText;
+  final Color? avatarColor;
 
   const ChatTile({
     super.key,
@@ -12,6 +15,9 @@ class ChatTile extends StatelessWidget {
     required this.message,
     required this.time,
     required this.onTap,
+    this.leadingIcon,
+    this.avatarText,
+    this.avatarColor,
   });
 
   @override
@@ -29,8 +35,16 @@ class ChatTile extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 28,
-              backgroundColor: Colors.pink.shade200,
-              child: const Icon(Icons.person),
+              backgroundColor: avatarColor ?? Colors.pink.shade200,
+              child: avatarText != null
+                  ? Text(
+                      avatarText!,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(leadingIcon ?? Icons.person, color: Colors.white),
             ),
             const SizedBox(width: 14),
             Expanded(
