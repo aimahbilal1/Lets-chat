@@ -8,17 +8,12 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize Firebase Admin
-// Note: You need to download your serviceAccountKey.json from Firebase Console
-// and place it in the backend folder or set FIREBASE_SERVICE_ACCOUNT_KEY env var.
-try {
-    const serviceAccount = require("./serviceAccountKey.json");
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-    });
-    console.log("Firebase Admin initialized successfully.");
-} catch (error) {
-    console.warn("Firebase Admin could not be initialized. Please provide serviceAccountKey.json.");
-}
+// Download serviceAccountKey.json from Firebase Console → Project Settings → Service Accounts
+const serviceAccount = require("./serviceAccountKey.json");
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+console.log("Firebase Admin initialized successfully.");
 
 const db = admin.firestore();
 
