@@ -173,11 +173,13 @@ class _CallsScreenState extends State<CallsScreen> {
                           stream: chatService.getScheduledCalls(),
                           builder: (context, scheduledSnapshot) {
                             final docs = scheduledSnapshot.data?.docs ?? [];
-                            final filtered = docs.where((doc) {
-                              final data = doc.data() as Map<String, dynamic>;
-                              final name = data['receiverName'] ?? 'User';
-                              return _matchesQuery(name);
-                            }).toList();
+                            final filtered =
+                                docs.where((doc) {
+                                  final data =
+                                      doc.data() as Map<String, dynamic>;
+                                  final name = data['receiverName'] ?? 'User';
+                                  return _matchesQuery(name);
+                                }).toList();
 
                             if (filtered.isNotEmpty) {
                               return Column(
@@ -199,9 +201,10 @@ class _CallsScreenState extends State<CallsScreen> {
                                     final scheduledAt =
                                         (data['scheduledAt'] as Timestamp?)
                                             ?.toDate();
-                                    final time = scheduledAt != null
-                                        ? '${scheduledAt.day}/${scheduledAt.month}/${scheduledAt.year} ${scheduledAt.hour.toString().padLeft(2, '0')}:${scheduledAt.minute.toString().padLeft(2, '0')}'
-                                        : 'Scheduled';
+                                    final time =
+                                        scheduledAt != null
+                                            ? '${scheduledAt.day}/${scheduledAt.month}/${scheduledAt.year} ${scheduledAt.hour.toString().padLeft(2, '0')}:${scheduledAt.minute.toString().padLeft(2, '0')}'
+                                            : 'Scheduled';
 
                                     return _callLogItem(
                                       context,
@@ -249,44 +252,49 @@ class _CallsScreenState extends State<CallsScreen> {
                           ),
 
                         if (snapshot.hasData)
-                          ...snapshot.data!.docs.where((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final name = data['receiverName'] ?? 'User';
-                            return _matchesQuery(name);
-                          }).map((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final String name = data['receiverName'] ?? 'User';
-                            final String receiverId = data['receiverId'] ?? '';
-                            final String time =
-                                (data['timestamp'] as Timestamp?)
-                                    ?.toDate()
-                                    .toString()
-                                    .substring(11, 16) ??
-                                "";
-                            final String details = "${data['status']} • $time";
-                            final IconData icon =
-                                data['status'] == 'missed'
-                                    ? Icons.call_missed
-                                    : (data['status'] == 'outgoing'
-                                        ? Icons.call_made
-                                        : Icons.call_received);
-                            final Color color =
-                                data['status'] == 'missed'
-                                    ? Colors.red
-                                    : (data['status'] == 'outgoing'
-                                        ? Colors.green
-                                        : Colors.blue);
+                          ...snapshot.data!.docs
+                              .where((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final name = data['receiverName'] ?? 'User';
+                                return _matchesQuery(name);
+                              })
+                              .map((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final String name =
+                                    data['receiverName'] ?? 'User';
+                                final String receiverId =
+                                    data['receiverId'] ?? '';
+                                final String time =
+                                    (data['timestamp'] as Timestamp?)
+                                        ?.toDate()
+                                        .toString()
+                                        .substring(11, 16) ??
+                                    "";
+                                final String details =
+                                    "${data['status']} • $time";
+                                final IconData icon =
+                                    data['status'] == 'missed'
+                                        ? Icons.call_missed
+                                        : (data['status'] == 'outgoing'
+                                            ? Icons.call_made
+                                            : Icons.call_received);
+                                final Color color =
+                                    data['status'] == 'missed'
+                                        ? Colors.red
+                                        : (data['status'] == 'outgoing'
+                                            ? Colors.green
+                                            : Colors.blue);
 
-                            return _callLogItem(
-                              context,
-                              name,
-                              receiverId,
-                              details,
-                              icon,
-                              color,
-                              Colors.pink.shade100,
-                            );
-                          }),
+                                return _callLogItem(
+                                  context,
+                                  name,
+                                  receiverId,
+                                  details,
+                                  icon,
+                                  color,
+                                  Colors.pink.shade100,
+                                );
+                              }),
                       ],
                     );
                   },

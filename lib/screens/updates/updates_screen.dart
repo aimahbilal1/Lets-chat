@@ -29,26 +29,29 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     final controller = TextEditingController(text: _searchQuery);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Search updates'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Type a name or status'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Search updates'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: 'Type a name or status',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() => _searchQuery = controller.text.trim());
+                  Navigator.pop(context);
+                },
+                child: const Text('Search'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              setState(() => _searchQuery = controller.text.trim());
-              Navigator.pop(context);
-            },
-            child: const Text('Search'),
-          ),
-        ],
-      ),
     );
   }
 
