@@ -22,12 +22,13 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDXqWvhsTQIPO-iSTgoB6sV5BcgL-zP2sM',
-    appId: '1:401797842103:web:placeholder', // placeholder
+    apiKey: 'AIzaSyDA-IPmqs6SiGGqgQ3kRl4nhUBg5yvFB9E',
+    appId: '1:401797842103:web:dd0869a8f552f0cd74b932',
     messagingSenderId: '401797842103',
     projectId: 'letschat-e73bf',
     authDomain: 'letschat-e73bf.firebaseapp.com',
     storageBucket: 'letschat-e73bf.firebasestorage.app',
+    measurementId: 'G-71YQRNCSM5',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
