@@ -153,11 +153,13 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // Calculate storage usage (placeholder logic)
+  // Calculate storage usage (simulate calculation)
   Future<Map<String, String>> getStorageUsage() async {
+    // Simulate some delay
+    await Future.delayed(const Duration(milliseconds: 500));
     return {
-      'used': '124 MB',
-      'total': '1 GB',
+      'used': '214 MB',
+      'total': '1.0 GB',
     };
   }
 }

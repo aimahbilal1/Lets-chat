@@ -8,6 +8,8 @@ class ChatTile extends StatelessWidget {
   final IconData? leadingIcon;
   final String? avatarText;
   final Color? avatarColor;
+  final String? photoUrl;
+  final bool isOnline;
 
   const ChatTile({
     super.key,
@@ -18,6 +20,8 @@ class ChatTile extends StatelessWidget {
     this.leadingIcon,
     this.avatarText,
     this.avatarColor,
+    this.photoUrl,
+    this.isOnline = false,
   });
 
   @override
@@ -33,19 +37,39 @@ class ChatTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: avatarColor ?? Colors.pink.shade200,
-              child:
-                  avatarText != null
-                      ? Text(
-                        avatarText!,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      )
-                      : Icon(leadingIcon ?? Icons.person, color: Colors.white),
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: avatarColor ?? Colors.pink.shade200,
+                  backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
+                  child: photoUrl == null
+                      ? (avatarText != null
+                          ? Text(
+                              avatarText!,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(leadingIcon ?? Icons.person, color: Colors.white))
+                      : null,
+                ),
+                if (isOnline)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 14),
             Expanded(

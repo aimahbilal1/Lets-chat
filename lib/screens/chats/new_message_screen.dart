@@ -5,13 +5,27 @@ import '../../core/app_colors.dart';
 import '../../core/services/chat_service.dart';
 import 'message_screen.dart';
 
-class NewMessageScreen extends StatelessWidget {
+class NewMessageScreen extends StatefulWidget {
   const NewMessageScreen({super.key});
+
+  @override
+  State<NewMessageScreen> createState() => _NewMessageScreenState();
+}
+
+class _NewMessageScreenState extends State<NewMessageScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final chatService = Provider.of<ChatService>(context);
     final currentUser = FirebaseAuth.instance.currentUser;
+    final query = _searchController.text.trim();
 
     return Scaffold(
       body: Container(
@@ -48,10 +62,12 @@ class NewMessageScreen extends StatelessWidget {
                     color: Colors.white.withOpacity(0.75),
                     borderRadius: BorderRadius.circular(30),
                   ),
-                  child: const TextField(
-                    decoration: InputDecoration(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) => setState(() {}),
+                    decoration: const InputDecoration(
                       border: InputBorder.none,
-                      hintText: "Search contacts...",
+                      hintText: "Search contacts by name or email...",
                       icon: Icon(Icons.search),
                     ),
                   ),
@@ -61,7 +77,9 @@ class NewMessageScreen extends StatelessWidget {
 
                 Expanded(
                   child: StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: chatService.getUsersStream(),
+                    stream: query.isEmpty
+                        ? chatService.getUsersStream()
+                        : chatService.searchUsers(query),
                     builder: (context, snapshot) {
                       if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
                       if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
@@ -78,16 +96,18 @@ class NewMessageScreen extends StatelessWidget {
                         itemBuilder: (_, index) {
                           final user = users[index];
                           final String email = user['email'] ?? "User";
-                          final String name = email.contains('@') ? email.split('@')[0] : email;
+                          final String name = user['name'] ?? (email.contains('@') ? email.split('@')[0] : email);
 
                           return GestureDetector(
                             onTap: () {
+                              final ids = [currentUser!.uid, user['uid'] as String]..sort();
                               Navigator.pushReplacement(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => MessageScreen(
                                     userName: name,
                                     receiverId: user['uid'],
+                                    chatRoomId: ids.join('_'),
                                   ),
                                 ),
                               );
@@ -104,16 +124,32 @@ class NewMessageScreen extends StatelessWidget {
                                   CircleAvatar(
                                     radius: 28,
                                     backgroundColor: Colors.pink.shade200,
-                                    child: Text(name[0].toUpperCase()),
+                                    backgroundImage: user['photoUrl'] != null ? NetworkImage(user['photoUrl']) : null,
+                                    child: user['photoUrl'] == null ? Text(name[0].toUpperCase()) : null,
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
-                                    child: Text(
-                                      name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        if (user['about'] != null)
+                                          Text(
+                                            user['about'],
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                      ],
                                     ),
                                   ),
                                   const Icon(Icons.chat_bubble_outline)
@@ -133,4 +169,4 @@ class NewMessageScreen extends StatelessWidget {
       ),
     );
   }
-}
+}

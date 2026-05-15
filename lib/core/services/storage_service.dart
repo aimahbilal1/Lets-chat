@@ -23,4 +23,14 @@ class StorageService {
       return null;
     }
   }
+
+  // Delete file from Firebase Storage
+  Future<void> deleteFile(String url) async {
+    try {
+      final Reference ref = _storage.refFromURL(url);
+      await ref.delete();
+    } catch (e) {
+      print("Error deleting file: $e");
+    }
+  }
 }

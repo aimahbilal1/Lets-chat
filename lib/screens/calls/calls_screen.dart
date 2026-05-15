@@ -4,11 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
 import '../../core/services/chat_service.dart';
 import '../../widgets/bottom_nav.dart';
-import '../chats/chats_screen.dart';
-import '../community/community_screen.dart';
-import '../settings/settings_detail_screen.dart';
 import '../chats/new_message_screen.dart';
-import '../updates/updates_screen.dart';
 
 class CallsScreen extends StatefulWidget {
   const CallsScreen({super.key});

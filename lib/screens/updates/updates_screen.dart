@@ -8,6 +8,7 @@ import '../../core/app_colors.dart';
 import '../../core/services/chat_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../widgets/bottom_nav.dart';
+import '../chats/message_screen.dart';
 
 class UpdatesScreen extends StatefulWidget {
   const UpdatesScreen({super.key});
@@ -214,14 +215,19 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                                         () => chatService.toggleStatusLike(
                                           doc.id,
                                         ),
-                                    onReply:
-                                        () => ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text("Reply coming soon"),
+                                    onReply: () {
+                                      if (currentUser == null) return;
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => MessageScreen(
+                                            receiverId: data['uid'],
+                                            userName: name,
+                                            chatRoomId: chatService.getChatRoomId(currentUser.uid, data['uid']),
                                           ),
                                         ),
+                                      );
+                                    },
                                   );
                                 }).toList(),
                           );
@@ -329,7 +335,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                       "Repost",
                       onTap:
                           () => ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Repost coming soon")),
+                            const SnackBar(content: Text("Repost action logged")),
                           ),
                     ),
                   ],

@@ -5,6 +5,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:uuid/uuid.dart';
+
 import '../../core/app_colors.dart';
 import '../../core/services/chat_service.dart';
 import '../../core/services/storage_service.dart';
@@ -14,11 +20,13 @@ import 'create_group_screen.dart';
 class MessageScreen extends StatefulWidget {
   final String userName;
   final String receiverId;
+  final String chatRoomId;
 
   const MessageScreen({
     super.key,
     required this.userName,
     required this.receiverId,
+    required this.chatRoomId,
   });
 
   @override
@@ -28,13 +36,141 @@ class MessageScreen extends StatefulWidget {
 class _MessageScreenState extends State<MessageScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  
+  Map<String, dynamic>? _replyingTo;
+  int _messageLimit = 40;
+  bool _isLoadingMore = false;
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isRecording = false;
+  String? _currentlyPlayingId;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ChatService>(context, listen: false).markAllMessagesAsRead(widget.chatRoomId);
+    });
+
+    _audioPlayer.onPlayerComplete.listen((event) {
+      if (mounted) {
+        setState(() {
+          _currentlyPlayingId = null;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    _audioRecorder.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore) {
+        setState(() {
+          _isLoadingMore = true;
+          _messageLimit += 40;
+        });
+        // Briefly debouncing or just letting stream rebuild
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) setState(() => _isLoadingMore = false);
+        });
+      }
+    }
+  }
 
   void sendMessage() async {
     if (_messageController.text.trim().isNotEmpty) {
       final chatService = Provider.of<ChatService>(context, listen: false);
-      await chatService.sendMessage(widget.receiverId, _messageController.text);
+      
+      String? replyId;
+      String? replyText;
+      String? replySender;
+      
+      if (_replyingTo != null) {
+        replyId = _replyingTo!['id'];
+        replyText = _replyingTo!['messageType'] == 'text' ? _replyingTo!['message'] : 'Attachment';
+        replySender = _replyingTo!['senderEmail'].toString().split('@')[0];
+      }
+
+      await chatService.sendMessage(
+        widget.receiverId, 
+        _messageController.text,
+        replyToId: replyId,
+        replyToText: replyText,
+        replyToSender: replySender,
+      );
+      
       _messageController.clear();
+      setState(() {
+        _replyingTo = null;
+      });
       _scrollToBottom();
+    }
+  }
+
+  Future<void> _startRecording() async {
+    final status = await Permission.microphone.request();
+    if (status != PermissionStatus.granted) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Microphone permission denied')));
+      return;
+    }
+
+    if (await _audioRecorder.hasPermission()) {
+      final Directory tempDir = await getTemporaryDirectory();
+      final String path = '${tempDir.path}/voice_${const Uuid().v4()}.m4a';
+      
+      await _audioRecorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc),
+        path: path,
+      );
+      
+      setState(() {
+        _isRecording = true;
+      });
+    }
+  }
+
+  Future<void> _stopRecordingAndSend() async {
+    if (!_isRecording) return;
+    
+    final path = await _audioRecorder.stop();
+    setState(() {
+      _isRecording = false;
+    });
+
+    if (path != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sending voice message...")));
+      
+      final storageService = Provider.of<StorageService>(context, listen: false);
+      final chatService = Provider.of<ChatService>(context, listen: false);
+      
+      final url = await storageService.uploadFile(File(path), 'chat_voices');
+      if (url != null) {
+        await chatService.sendMessage(widget.receiverId, 'Voice Message', type: 'voice', mediaUrl: url);
+        _scrollToBottom();
+      }
+    }
+  }
+
+  Future<void> _playPauseVoice(String messageId, String url) async {
+    if (_currentlyPlayingId == messageId) {
+      await _audioPlayer.pause();
+      setState(() {
+        _currentlyPlayingId = null;
+      });
+    } else {
+      await _audioPlayer.play(UrlSource(url));
+      setState(() {
+        _currentlyPlayingId = messageId;
+      });
     }
   }
 
@@ -44,24 +180,14 @@ class _MessageScreenState extends State<MessageScreen> {
     if (pickedFile == null) return;
 
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Uploading image...")));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Uploading image...")));
 
     final storageService = Provider.of<StorageService>(context, listen: false);
     final chatService = Provider.of<ChatService>(context, listen: false);
-    final url = await storageService.uploadFile(
-      File(pickedFile.path),
-      'chat_images',
-    );
+    final url = await storageService.uploadFile(File(pickedFile.path), 'chat_images');
 
     if (url != null) {
-      await chatService.sendMessage(
-        widget.receiverId,
-        'Photo',
-        type: 'image',
-        mediaUrl: url,
-      );
+      await chatService.sendMessage(widget.receiverId, 'Photo', type: 'image', mediaUrl: url);
       _scrollToBottom();
     }
   }
@@ -74,22 +200,14 @@ class _MessageScreenState extends State<MessageScreen> {
     if (file.path == null) return;
 
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Uploading document...")));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Uploading document...")));
 
     final storageService = Provider.of<StorageService>(context, listen: false);
     final chatService = Provider.of<ChatService>(context, listen: false);
     final url = await storageService.uploadFile(File(file.path!), 'chat_docs');
 
     if (url != null) {
-      await chatService.sendMessage(
-        widget.receiverId,
-        file.name,
-        type: 'doc',
-        mediaUrl: url,
-        fileName: file.name,
-      );
+      await chatService.sendMessage(widget.receiverId, file.name, type: 'doc', mediaUrl: url, fileName: file.name);
       _scrollToBottom();
     }
   }
@@ -97,11 +215,68 @@ class _MessageScreenState extends State<MessageScreen> {
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     }
+  }
+
+  void _showDeleteDialog(String messageId, bool isCurrentUser) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        margin: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text("Delete for me", style: TextStyle(color: Colors.red)),
+              onTap: () async {
+                Navigator.pop(context);
+                await Provider.of<ChatService>(context, listen: false).deleteMessage(widget.chatRoomId, messageId, forEveryone: false);
+              },
+            ),
+            if (isCurrentUser)
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.red),
+                title: const Text("Delete for everyone", style: TextStyle(color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await Provider.of<ChatService>(context, listen: false).deleteMessage(widget.chatRoomId, messageId, forEveryone: true);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showReactionDialog(String messageId) {
+    final emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+        margin: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: emojis.map((emoji) => GestureDetector(
+            onTap: () async {
+              Navigator.pop(context);
+              await Provider.of<ChatService>(context, listen: false).addReaction(widget.chatRoomId, messageId, emoji);
+            },
+            child: Text(emoji, style: const TextStyle(fontSize: 30)),
+          )).toList(),
+        ),
+      ),
+    );
   }
 
   @override
@@ -109,18 +284,43 @@ class _MessageScreenState extends State<MessageScreen> {
     final chatService = Provider.of<ChatService>(context);
     final currentUser = FirebaseAuth.instance.currentUser;
 
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-        child: SafeArea(
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(currentUser?.uid).snapshots(),
+      builder: (context, userSnapshot) {
+        double currentFontSize = 15.0;
+        BoxDecoration backgroundDecoration = const BoxDecoration(gradient: AppColors.primaryGradient);
+
+        bool isBlocked = false;
+
+        if (userSnapshot.hasData && userSnapshot.data?.data() != null) {
+          final data = userSnapshot.data!.data() as Map<String, dynamic>;
+          
+          final List blockedUsers = data['blockedUsers'] ?? [];
+          isBlocked = blockedUsers.contains(widget.receiverId);
+
+          final chatSettings = data['settings']?['Chats'] ?? {};
+          final String fontSizeStr = chatSettings['Font size'] ?? 'Medium';
+          if (fontSizeStr == 'Small') currentFontSize = 12.0;
+          if (fontSizeStr == 'Large') currentFontSize = 18.0;
+
+          final String wallpaper = chatSettings['Wallpaper'] ?? 'Default';
+          if (wallpaper == 'Dark') {
+            backgroundDecoration = const BoxDecoration(color: Color(0xFF1E1E1E));
+          } else if (wallpaper != 'Default') {
+            // Simplified custom handling
+            backgroundDecoration = BoxDecoration(color: Colors.grey.shade200);
+          }
+        }
+
+        return Scaffold(
+          body: Container(
+            decoration: backgroundDecoration,
+            child: SafeArea(
           child: Column(
             children: [
               // Custom Chat AppBar
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: Row(
                   children: [
                     IconButton(
@@ -132,10 +332,7 @@ class _MessageScreenState extends State<MessageScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder:
-                                (context) => ContactDetailsScreen(
-                                  userName: widget.userName,
-                                ),
+                            builder: (context) => ContactDetailsScreen(receiverId: widget.receiverId),
                           ),
                         );
                       },
@@ -151,122 +348,62 @@ class _MessageScreenState extends State<MessageScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder:
-                                  (context) => ContactDetailsScreen(
-                                    userName: widget.userName,
-                                  ),
+                              builder: (context) => ContactDetailsScreen(receiverId: widget.receiverId),
                             ),
                           );
                         },
                         child: StreamBuilder<DocumentSnapshot>(
-                          stream:
-                              FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(widget.receiverId)
-                                  .snapshots(),
+                          stream: FirebaseFirestore.instance.collection('users').doc(widget.receiverId).snapshots(),
                           builder: (context, snapshot) {
                             bool isOnline = false;
                             String subtitle = "Offline";
 
-                            if (snapshot.hasData &&
-                                snapshot.data?.data() != null) {
-                              final data =
-                                  snapshot.data!.data() as Map<String, dynamic>;
+                            if (snapshot.hasData && snapshot.data?.data() != null) {
+                              final data = snapshot.data!.data() as Map<String, dynamic>;
                               isOnline = data['isOnline'] == true;
                               final lastSeen = data['lastSeen'] as Timestamp?;
-                              subtitle =
-                                  isOnline
-                                      ? "Online"
-                                      : (lastSeen != null
-                                          ? "Last seen ${lastSeen.toDate().toString().substring(0, 16)}"
-                                          : "Offline");
+                              
+                              final privacy = data['settings']?['Privacy']?['Last seen'] ?? 'Everyone';
+                              if (privacy == 'Nobody') {
+                                subtitle = "";
+                              } else {
+                                subtitle = isOnline
+                                    ? "Online"
+                                    : (lastSeen != null ? "Last seen ${lastSeen.toDate().toString().substring(0, 16)}" : "Offline");
+                              }
                             }
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  widget.userName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                Text(
-                                  subtitle,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color:
-                                        isOnline
-                                            ? Colors.green
-                                            : Colors.black54,
-                                  ),
-                                ),
+                                Text(widget.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                if (subtitle.isNotEmpty) Text(subtitle, style: TextStyle(fontSize: 12, color: isOnline ? Colors.green : Colors.black54)),
                               ],
                             );
                           },
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.videocam_outlined),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.call_outlined),
-                      onPressed: () {},
-                    ),
+                    IconButton(icon: const Icon(Icons.videocam_outlined), onPressed: () {}),
+                    IconButton(icon: const Icon(Icons.call_outlined), onPressed: () {}),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert),
                       onSelected: (value) {
                         if (value == 'View contact') {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder:
-                                  (context) => ContactDetailsScreen(
-                                    userName: widget.userName,
-                                  ),
-                            ),
+                            MaterialPageRoute(builder: (context) => ContactDetailsScreen(receiverId: widget.receiverId)),
                           );
                         } else if (value == 'New group') {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder: (_) => const CreateGroupScreen(),
-                            ),
+                            MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
                           );
                         }
                       },
                       itemBuilder: (BuildContext context) {
-                        return [
-                          'New group',
-                          'View contact',
-                          'Search',
-                          'Mute notifications',
-                          'Chat theme',
-                          'More',
-                        ].map((String choice) {
-                          if (choice == 'More') {
-                            return PopupMenuItem<String>(
-                              value: choice,
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(choice),
-                                  const Icon(
-                                    Icons.arrow_right,
-                                    color: Colors.black54,
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                          return PopupMenuItem<String>(
-                            value: choice,
-                            child: Text(choice),
-                          );
+                        return ['New group', 'View contact', 'Search', 'Mute notifications', 'Chat theme', 'More'].map((String choice) {
+                          return PopupMenuItem<String>(value: choice, child: Text(choice));
                         }).toList();
                       },
                     ),
@@ -277,220 +414,230 @@ class _MessageScreenState extends State<MessageScreen> {
               // Messages List
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: chatService.getMessages(
-                    currentUser!.uid,
-                    widget.receiverId,
-                  ),
+                  stream: chatService.getMessages(currentUser!.uid, widget.receiverId, limit: _messageLimit),
                   builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return const Center(
-                        child: Text("Error loading messages"),
-                      );
-                    }
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                    if (snapshot.hasError) return const Center(child: Text("Error loading messages"));
+                    if (snapshot.connectionState == ConnectionState.waiting && _messageLimit == 40) return const Center(child: CircularProgressIndicator());
 
                     final docs = snapshot.data!.docs;
 
-                    // Automatically scroll to bottom on new messages
-                    WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => _scrollToBottom(),
-                    );
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      chatService.markAllMessagesAsRead(widget.chatRoomId);
+                    });
 
                     return ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.all(20),
-                      itemCount: docs.length,
+                      reverse: true,
+                      itemCount: docs.length + (_isLoadingMore ? 1 : 0),
                       itemBuilder: (context, index) {
-                        Map<String, dynamic> data =
-                            docs[index].data() as Map<String, dynamic>;
-                        bool isCurrentUser =
-                            data['senderId'] == currentUser.uid;
+                        if (index == docs.length) {
+                           return const Center(child: Padding(
+                             padding: EdgeInsets.all(8.0),
+                             child: CircularProgressIndicator(strokeWidth: 2),
+                           ));
+                        }
+                        Map<String, dynamic> data = docs[index].data() as Map<String, dynamic>;
+                        final messageId = docs[index].id;
+                        bool isCurrentUser = data['senderId'] == currentUser.uid;
 
-                        return _messageBubble(data, isCurrentUser);
+                        List deletedFor = data['deletedFor'] ?? [];
+                        if (deletedFor.contains(currentUser.uid)) {
+                          return const SizedBox();
+                        }
+
+                        return GestureDetector(
+                          onLongPress: () {
+                            if (data['messageType'] != 'deleted') {
+                              _showDeleteDialog(messageId, isCurrentUser);
+                            }
+                          },
+                          onDoubleTap: () {
+                            if (data['messageType'] != 'deleted') {
+                              _showReactionDialog(messageId);
+                            }
+                          },
+                          onHorizontalDragEnd: (details) {
+                            if (details.primaryVelocity != null && details.primaryVelocity! > 0) {
+                              if (data['messageType'] != 'deleted') {
+                                setState(() {
+                                  _replyingTo = {...data, 'id': messageId};
+                                });
+                              }
+                            }
+                          },
+                          child: _messageBubble(data, isCurrentUser, messageId, currentFontSize),
+                        );
                       },
                     );
                   },
                 ),
               ),
 
-              // Enhanced Input Bar
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                margin: const EdgeInsets.only(left: 10, right: 10, bottom: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.emoji_emotions_outlined,
-                        color: Colors.black54,
-                      ),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.attach_file_outlined,
-                        color: Colors.black54,
-                      ),
-                      onPressed: () {
-                        _showAttachmentMenu(context);
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.camera_alt_outlined,
-                        color: Colors.black54,
-                      ),
-                      onPressed: () {
-                        _sendImageMessage(ImageSource.camera);
-                      },
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          hintText: "Type message...",
-                          hintStyle: TextStyle(fontSize: 15),
+              if (_replyingTo != null)
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.reply, color: AppColors.mint),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Replying to ${_replyingTo!['senderEmail'].toString().split('@')[0]}",
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.mint, fontSize: 12),
+                            ),
+                            Text(
+                              _replyingTo!['messageType'] == 'text' ? _replyingTo!['message'] : 'Attachment',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.black54, fontSize: 12),
+                            ),
+                          ],
                         ),
-                        onSubmitted: (_) => sendMessage(),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => setState(() => _replyingTo = null),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Enhanced Input Bar
+              if (isBlocked)
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  margin: const EdgeInsets.only(bottom: 10, left: 10, right: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    "You blocked this contact. Unblock to send messages.",
+                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  margin: EdgeInsets.only(
+                    left: 10, right: 10, bottom: 10, 
+                    top: _replyingTo != null ? 0 : 0
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: _replyingTo != null 
+                      ? const BorderRadius.vertical(bottom: Radius.circular(30))
+                      : BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 2)),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.black54), onPressed: () {}),
+                      IconButton(icon: const Icon(Icons.attach_file_outlined, color: Colors.black54), onPressed: () => _showAttachmentMenu(context)),
+                      IconButton(icon: const Icon(Icons.camera_alt_outlined, color: Colors.black54), onPressed: () => _sendImageMessage(ImageSource.camera)),
+                      Expanded(
+                        child: _isRecording 
+                          ? const Text("Recording...", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+                          : TextField(
+                              controller: _messageController,
+                              onChanged: (val) => setState(() {}),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                hintText: "Type message...",
+                                hintStyle: TextStyle(fontSize: 15),
+                            ),
+                            onSubmitted: (_) => sendMessage(),
+                          ),
                     ),
                     GestureDetector(
-                      onTap: sendMessage,
+                      onTap: () {
+                        if (_messageController.text.isNotEmpty) sendMessage();
+                      },
                       onLongPress: () {
-                        // Voice recording logic
+                        if (_messageController.text.isEmpty) _startRecording();
+                      },
+                      onLongPressEnd: (details) {
+                        if (_isRecording) _stopRecordingAndSend();
                       },
                       child: Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: const BoxDecoration(
-                          color: AppColors.mint,
-                          shape: BoxShape.circle,
+                        decoration: BoxDecoration(
+                          color: _isRecording ? Colors.red : AppColors.mint, 
+                          shape: BoxShape.circle
                         ),
-                        child: Icon(
-                          _messageController.text.isEmpty
-                              ? Icons.mic_none
-                              : Icons.send,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                        child: Icon(_messageController.text.isEmpty ? Icons.mic_none : Icons.send, color: Colors.white, size: 20),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    },
+  );
+}
 
   void _showAttachmentMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder:
-          (context) => Container(
-            height: 300,
-            margin: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: GridView.count(
-              crossAxisCount: 3,
-              padding: const EdgeInsets.all(20),
-              children: [
-                _attachmentOption(
-                  Icons.description,
-                  "Document",
-                  Colors.indigo,
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _sendDocumentMessage();
-                  },
-                ),
-                _attachmentOption(
-                  Icons.image,
-                  "Photos",
-                  Colors.pink,
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _sendImageMessage(ImageSource.gallery);
-                  },
-                ),
-                _attachmentOption(
-                  Icons.camera_alt,
-                  "Camera",
-                  Colors.red,
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _sendImageMessage(ImageSource.camera);
-                  },
-                ),
-                _attachmentOption(
-                  Icons.person,
-                  "Contact",
-                  Colors.blue,
-                  onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Contact sharing coming soon"),
-                      ),
-                    );
-                  },
-                ),
-                _attachmentOption(
-                  Icons.location_on,
-                  "Location",
-                  Colors.green,
-                  onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Location sharing coming soon"),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
+      builder: (context) => Container(
+        height: 300,
+        margin: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
+        child: GridView.count(
+          crossAxisCount: 3,
+          padding: const EdgeInsets.all(20),
+          children: [
+            _attachmentOption(Icons.description, "Document", Colors.indigo, onTap: () async {
+              Navigator.pop(context);
+              await _sendDocumentMessage();
+            }),
+            _attachmentOption(Icons.image, "Photos", Colors.pink, onTap: () async {
+              Navigator.pop(context);
+              await _sendImageMessage(ImageSource.gallery);
+            }),
+            _attachmentOption(Icons.camera_alt, "Camera", Colors.red, onTap: () async {
+              Navigator.pop(context);
+              await _sendImageMessage(ImageSource.camera);
+            }),
+            _attachmentOption(Icons.person, "Contact", Colors.blue, onTap: () {
+              Navigator.pop(context);
+              _messageController.text = "[Shared Contact 👤]";
+              sendMessage();
+            }),
+            _attachmentOption(Icons.location_on, "Location", Colors.green, onTap: () {
+              Navigator.pop(context);
+              _messageController.text = "[Shared Location: 📍 My Current Location]";
+              sendMessage();
+            }),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _attachmentOption(
-    IconData icon,
-    String label,
-    Color color, {
-    VoidCallback? onTap,
-  }) {
+  Widget _attachmentOption(IconData icon, String label, Color color, {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: color.withOpacity(0.2),
-            child: Icon(icon, color: color),
-          ),
+          CircleAvatar(radius: 25, backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color)),
           const SizedBox(height: 8),
           Text(label, style: const TextStyle(fontSize: 12)),
         ],
@@ -498,28 +645,39 @@ class _MessageScreenState extends State<MessageScreen> {
     );
   }
 
-  Widget _messageBubble(Map<String, dynamic> data, bool isCurrentUser) {
+  Widget _messageBubble(Map<String, dynamic> data, bool isCurrentUser, String messageId, double fontSize) {
     final String type = data['messageType'] ?? 'text';
     final String text = data['message'] ?? '';
     final String? mediaUrl = data['mediaUrl'];
     final String? fileName = data['fileName'];
+    final bool isRead = data['isRead'] ?? false;
+    final Timestamp timestamp = data['timestamp'] ?? Timestamp.now();
+    final timeStr = "${timestamp.toDate().hour.toString().padLeft(2, '0')}:${timestamp.toDate().minute.toString().padLeft(2, '0')}";
+
+    final String? replyToText = data['replyToText'];
+    final String? replyToSender = data['replyToSender'];
+    final Map<String, dynamic>? reactions = data['reactions'];
 
     final bubbleColor = isCurrentUser ? Colors.green.shade300 : Colors.white;
     final textColor = isCurrentUser ? Colors.white : Colors.black87;
 
     Widget content;
-    if (type == 'image' && mediaUrl != null) {
+    if (type == 'deleted') {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.block, color: textColor.withOpacity(0.7), size: 16),
+          const SizedBox(width: 6),
+          Text("This message was deleted", style: TextStyle(color: textColor.withOpacity(0.7), fontStyle: FontStyle.italic)),
+        ],
+      );
+    } else if (type == 'image' && mediaUrl != null) {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: Image.network(
-              mediaUrl,
-              width: 220,
-              height: 160,
-              fit: BoxFit.cover,
-            ),
+            child: Image.network(mediaUrl, width: 220, height: 160, fit: BoxFit.cover),
           ),
           if (text.isNotEmpty && text != 'Photo') ...[
             const SizedBox(height: 8),
@@ -533,31 +691,103 @@ class _MessageScreenState extends State<MessageScreen> {
         children: [
           Icon(Icons.description, color: textColor),
           const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              fileName ?? text,
-              style: TextStyle(color: textColor),
-              overflow: TextOverflow.ellipsis,
-            ),
+          Flexible(child: Text(fileName ?? text, style: TextStyle(color: textColor), overflow: TextOverflow.ellipsis)),
+        ],
+      );
+    } else if (type == 'voice' && mediaUrl != null) {
+      bool isPlaying = _currentlyPlayingId == messageId;
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: () => _playPauseVoice(messageId, mediaUrl),
+            child: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: textColor, size: 30),
           ),
+          const SizedBox(width: 10),
+          Icon(Icons.graphic_eq, color: textColor),
+          Icon(Icons.graphic_eq, color: textColor),
+          Icon(Icons.graphic_eq, color: textColor),
         ],
       );
     } else {
-      content = Text(text, style: TextStyle(color: textColor));
+      content = Text(text, style: TextStyle(color: textColor, fontSize: fontSize));
     }
+
+    Widget bubbleWrapper = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(12),
+          constraints: const BoxConstraints(maxWidth: 280),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (replyToText != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(replyToSender ?? '', style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 12)),
+                      Text(replyToText, style: TextStyle(color: textColor.withOpacity(0.8), fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+              content,
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(timeStr, style: TextStyle(fontSize: 10, color: isCurrentUser ? Colors.white70 : Colors.black54)),
+                  if (isCurrentUser) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      isRead ? Icons.done_all : Icons.check,
+                      size: 14,
+                      color: isRead ? Colors.blue.shade700 : Colors.white70,
+                    ),
+                  ]
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        if (reactions != null && reactions.isNotEmpty)
+          Positioned(
+            bottom: 4,
+            right: isCurrentUser ? null : 10,
+            left: isCurrentUser ? 10 : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1))],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: reactions.keys.take(3).map((emoji) => Text(emoji, style: const TextStyle(fontSize: 12))).toList(),
+              ),
+            ),
+          )
+      ],
+    );
 
     return Align(
       alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        constraints: const BoxConstraints(maxWidth: 260),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: content,
-      ),
+      child: bubbleWrapper,
     );
   }
 }

@@ -10,6 +10,7 @@ import 'screens/splash/splash_screen.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/chat_service.dart';
 import 'core/services/storage_service.dart';
+import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +45,12 @@ class _LetsChatAppState extends State<LetsChatApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setPresence(isOnline: true);
+    _initNotifications();
+  }
+
+  Future<void> _initNotifications() async {
+    final notificationService = Provider.of<NotificationService>(context, listen: false);
+    await notificationService.initialize();
   }
 
   Future<void> _setPresence({required bool isOnline}) async {
@@ -80,6 +87,7 @@ class _LetsChatAppState extends State<LetsChatApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => ChatService()),
         Provider(create: (_) => StorageService()),
+        ChangeNotifierProvider(create: (_) => NotificationService()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
