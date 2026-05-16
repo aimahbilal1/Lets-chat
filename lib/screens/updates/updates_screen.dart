@@ -19,6 +19,7 @@ class UpdatesScreen extends StatefulWidget {
 
 class _UpdatesScreenState extends State<UpdatesScreen> {
   String _searchQuery = '';
+  final Set<String> _viewedStatusIds = {};
 
   bool _matchesQuery(String name, String status) {
     if (_searchQuery.trim().isEmpty) return true;
@@ -201,6 +202,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                                       currentUser != null &&
                                       likes.contains(currentUser.uid);
                                   final likeCount = likes.length;
+
+                                  // Track view once per status per session
+                                  if (currentUser != null &&
+                                      data['uid'] != currentUser.uid &&
+                                      !_viewedStatusIds.contains(doc.id)) {
+                                    _viewedStatusIds.add(doc.id);
+                                    chatService.addStatusViewer(doc.id);
+                                  }
 
                                   return _statusItem(
                                     context,

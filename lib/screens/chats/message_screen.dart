@@ -323,6 +323,18 @@ class _MessageScreenState extends State<MessageScreen> {
                   );
                 },
               ),
+            // Star / Unstar
+            ListTile(
+              leading: Icon(
+                data['isStarred'] == true ? Icons.star : Icons.star_border,
+                color: data['isStarred'] == true ? Colors.amber : Colors.black87,
+              ),
+              title: Text(data['isStarred'] == true ? "Unstar" : "Star"),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await chatService.toggleStarMessage(widget.chatRoomId, messageId, data['isStarred'] == true);
+              },
+            ),
             // Delete for me
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.red),
