@@ -59,15 +59,13 @@ class IncomingCallScreen extends StatelessWidget {
                       if (context.mounted) Navigator.of(context).pop();
                     },
                   ),
-                  // Accept
+                  // Accept — navigate directly, screen handles getLocalStream + answerCall
                   _callActionButton(
                     icon: callType == 'video' ? Icons.videocam : Icons.call,
                     color: Colors.green,
                     label: 'Accept',
-                    onTap: () async {
-                      await signalingService.getLocalStream(video: callType == 'video');
+                    onTap: () {
                       if (!context.mounted) return;
-
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(
                           builder: (_) => callType == 'video'

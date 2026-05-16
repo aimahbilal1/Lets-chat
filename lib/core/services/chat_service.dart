@@ -118,6 +118,51 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  // ─── LOG CALL MESSAGE ───────────────────────────────────────────────────────
+  Future<void> logCallMessage(
+    String receiverId,
+    String callType,   // 'audio' or 'video'
+    String status,     // 'completed' or 'no_answer'
+    int durationSeconds,
+  ) async {
+    try {
+      final String currentUserId = _auth.currentUser!.uid;
+      final String currentUserEmail = _auth.currentUser!.email.toString();
+      final Timestamp timestamp = Timestamp.now();
+
+      List<String> ids = [currentUserId, receiverId];
+      ids.sort();
+      final chatRoomId = ids.join('_');
+
+      await _firestore
+          .collection('chat_rooms')
+          .doc(chatRoomId)
+          .collection('messages')
+          .add({
+        'senderId': currentUserId,
+        'senderEmail': currentUserEmail,
+        'receiverId': receiverId,
+        'message': callType == 'video' ? 'Video call' : 'Voice call',
+        'messageType': 'call',
+        'callType': callType,
+        'callStatus': status,
+        'callDuration': durationSeconds,
+        'timestamp': timestamp,
+        'isRead': false,
+      });
+
+      final label = callType == 'video' ? '📹 Video call' : '📞 Voice call';
+      await _firestore.collection('chat_rooms').doc(chatRoomId).set({
+        'lastMessage': label,
+        'lastMessageTime': timestamp,
+        'lastMessageSenderId': currentUserId,
+        'users': ids,
+      }, SetOptions(merge: true));
+    } catch (e, st) {
+      _logError('logCallMessage', e, st);
+    }
+  }
+
   // ─── DELETE MESSAGE ─────────────────────────────────────────────────────────
   Future<void> deleteMessage(String chatRoomId, String messageId, {bool forEveryone = false}) async {
     try {

@@ -224,35 +224,35 @@ class _MessageScreenState extends State<MessageScreen> {
     final callerName = currentUser?.email?.split('@')[0] ?? 'Me';
 
     try {
-      await signalingService.getLocalStream(video: type == 'video');
-      final callId = await signalingService.initiateCall(
-        receiverId: widget.receiverId,
-        callerName: callerName,
-        receiverName: widget.userName,
-        type: type,
-        onRemoteStream: (_) {},
-        onCallEnded: () {},
-      );
-
-      if (!context.mounted) return;
-
-      await Navigator.of(context).push(
+      final result = await Navigator.of(context).push<Map<String, dynamic>>(
         MaterialPageRoute(
           builder: (_) => type == 'video'
               ? VideoCallScreen(
                   contactName: widget.userName,
-                  callId: callId,
+                  receiverId: widget.receiverId,
+                  callerName: callerName,
                   isCaller: true,
                   signalingService: signalingService,
                 )
               : AudioCallScreen(
                   contactName: widget.userName,
-                  callId: callId,
+                  receiverId: widget.receiverId,
+                  callerName: callerName,
                   isCaller: true,
                   signalingService: signalingService,
                 ),
         ),
       );
+
+      if (context.mounted) {
+        final chatService = Provider.of<ChatService>(context, listen: false);
+        await chatService.logCallMessage(
+          widget.receiverId,
+          type,
+          result?['status'] as String? ?? 'no_answer',
+          result?['duration'] as int? ?? 0,
+        );
+      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -826,6 +826,54 @@ class _MessageScreenState extends State<MessageScreen> {
           Icon(Icons.graphic_eq, color: textColor),
           Icon(Icons.graphic_eq, color: textColor),
           Icon(Icons.graphic_eq, color: textColor),
+        ],
+      );
+    } else if (type == 'call') {
+      final callType = data['callType'] as String? ?? 'audio';
+      final callStatus = data['callStatus'] as String? ?? 'no_answer';
+      final callDuration = data['callDuration'] as int? ?? 0;
+      final isVideo = callType == 'video';
+
+      String subtitle;
+      if (callStatus == 'completed') {
+        final m = callDuration ~/ 60;
+        final s = callDuration % 60;
+        subtitle = m > 0 ? '${m}m ${s}s' : '${s} sec';
+      } else {
+        subtitle = 'No answer';
+      }
+
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isCurrentUser ? Colors.white.withValues(alpha: 0.2) : Colors.green.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isVideo ? Icons.videocam : Icons.call,
+              color: isCurrentUser ? Colors.white : Colors.green,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isVideo ? 'Video call' : 'Voice call',
+                style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: fontSize),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: fontSize - 2),
+              ),
+            ],
+          ),
         ],
       );
     } else {

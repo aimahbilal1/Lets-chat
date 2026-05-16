@@ -5,16 +5,24 @@ import '../../core/services/call_signaling_service.dart';
 
 class AudioCallScreen extends StatefulWidget {
   final String contactName;
-  final String callId;
   final bool isCaller;
   final CallSignalingService signalingService;
+
+  // Caller-only fields
+  final String? receiverId;
+  final String? callerName;
+
+  // Receiver-only field
+  final String? callId;
 
   const AudioCallScreen({
     super.key,
     required this.contactName,
-    required this.callId,
     required this.isCaller,
     required this.signalingService,
+    this.receiverId,
+    this.callerName,
+    this.callId,
   });
 
   @override
@@ -44,11 +52,17 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     await widget.signalingService.getLocalStream(video: false);
 
     if (widget.isCaller) {
-      // Call was already initiated before navigating here; just wait for connection
-      setState(() => _isConnected = false);
+      await widget.signalingService.initiateCall(
+        receiverId: widget.receiverId!,
+        callerName: widget.callerName!,
+        receiverName: widget.contactName,
+        type: 'audio',
+        onRemoteStream: (_) => _onConnected(),
+        onCallEnded: _onCallEnded,
+      );
     } else {
       await widget.signalingService.answerCall(
-        callId: widget.callId,
+        callId: widget.callId!,
         onRemoteStream: (_) => _onConnected(),
         onCallEnded: _onCallEnded,
       );
@@ -65,12 +79,20 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
 
   void _onCallEnded() {
     if (!mounted) return;
-    Navigator.of(context).pop();
+    Navigator.of(context).pop({
+      'status': _isConnected ? 'completed' : 'no_answer',
+      'duration': _seconds,
+    });
   }
 
   Future<void> _endCall() async {
     await widget.signalingService.endCall();
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) {
+      Navigator.of(context).pop({
+        'status': _isConnected ? 'completed' : 'no_answer',
+        'duration': _seconds,
+      });
+    }
   }
 
   String _formatDuration(int s) {

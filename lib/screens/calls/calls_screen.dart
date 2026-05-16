@@ -436,35 +436,35 @@ class _CallsScreenState extends State<CallsScreen> {
     final callerName = currentUser?.email?.split('@')[0] ?? 'Me';
 
     try {
-      await signalingService.getLocalStream(video: type == 'video');
-      final callId = await signalingService.initiateCall(
-        receiverId: receiverId,
-        callerName: callerName,
-        receiverName: receiverName,
-        type: type,
-        onRemoteStream: (_) {},
-        onCallEnded: () {},
-      );
-
-      if (!context.mounted) return;
-
-      await Navigator.of(context).push(
+      final result = await Navigator.of(context).push<Map<String, dynamic>>(
         MaterialPageRoute(
           builder: (_) => type == 'video'
               ? VideoCallScreen(
                   contactName: receiverName,
-                  callId: callId,
+                  receiverId: receiverId,
+                  callerName: callerName,
                   isCaller: true,
                   signalingService: signalingService,
                 )
               : AudioCallScreen(
                   contactName: receiverName,
-                  callId: callId,
+                  receiverId: receiverId,
+                  callerName: callerName,
                   isCaller: true,
                   signalingService: signalingService,
                 ),
         ),
       );
+
+      if (context.mounted) {
+        final chatService = Provider.of<ChatService>(context, listen: false);
+        await chatService.logCallMessage(
+          receiverId,
+          type,
+          result?['status'] as String? ?? 'no_answer',
+          result?['duration'] as int? ?? 0,
+        );
+      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

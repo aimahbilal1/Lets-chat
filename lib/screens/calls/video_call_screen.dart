@@ -5,16 +5,24 @@ import '../../core/services/call_signaling_service.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final String contactName;
-  final String callId;
   final bool isCaller;
   final CallSignalingService signalingService;
+
+  // Caller-only fields
+  final String? receiverId;
+  final String? callerName;
+
+  // Receiver-only field
+  final String? callId;
 
   const VideoCallScreen({
     super.key,
     required this.contactName,
-    required this.callId,
     required this.isCaller,
     required this.signalingService,
+    this.receiverId,
+    this.callerName,
+    this.callId,
   });
 
   @override
@@ -50,9 +58,18 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       setState(() => _localRenderer.srcObject = localStream);
     }
 
-    if (!widget.isCaller) {
+    if (widget.isCaller) {
+      await widget.signalingService.initiateCall(
+        receiverId: widget.receiverId!,
+        callerName: widget.callerName!,
+        receiverName: widget.contactName,
+        type: 'video',
+        onRemoteStream: _onRemoteStream,
+        onCallEnded: _onCallEnded,
+      );
+    } else {
       await widget.signalingService.answerCall(
-        callId: widget.callId,
+        callId: widget.callId!,
         onRemoteStream: _onRemoteStream,
         onCallEnded: _onCallEnded,
       );
@@ -72,12 +89,20 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   void _onCallEnded() {
     if (!mounted) return;
-    Navigator.of(context).pop();
+    Navigator.of(context).pop({
+      'status': _isConnected ? 'completed' : 'no_answer',
+      'duration': _seconds,
+    });
   }
 
   Future<void> _endCall() async {
     await widget.signalingService.endCall();
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) {
+      Navigator.of(context).pop({
+        'status': _isConnected ? 'completed' : 'no_answer',
+        'duration': _seconds,
+      });
+    }
   }
 
   @override
@@ -131,7 +156,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   ),
           ),
 
-          // Local video (picture-in-picture)
+          // Local video (picture-in-picture) — always visible
           Positioned(
             top: 60,
             right: 16,
@@ -141,7 +166,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               borderRadius: BorderRadius.circular(12),
               child: _isCameraOff
                   ? Container(color: Colors.grey.shade800, child: const Icon(Icons.videocam_off, color: Colors.white))
-                  : RTCVideoView(_localRenderer, mirror: _isFrontCamera, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                  : RTCVideoView(
+                      _localRenderer,
+                      mirror: _isFrontCamera,
+                      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                    ),
             ),
           ),
 
@@ -154,14 +183,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _formatDuration(_seconds),
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
+                  decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20)),
+                  child: Text(_formatDuration(_seconds), style: const TextStyle(color: Colors.white, fontSize: 14)),
                 ),
               ),
             ),
@@ -219,7 +242,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   _controlButton(
                     icon: Icons.chat_bubble_outline,
                     label: 'Chat',
-                    onTap: () => Navigator.of(context).pop(),
+                    onTap: () => Navigator.of(context).pop({
+                      'status': _isConnected ? 'completed' : 'no_answer',
+                      'duration': _seconds,
+                    }),
                   ),
                 ],
               ),
