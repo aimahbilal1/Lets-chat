@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../core/app_colors.dart';
+import '../core/app_theme.dart';
 
 class ChatTile extends StatelessWidget {
   final String name;
@@ -28,74 +30,74 @@ class ChatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.85),
-          borderRadius: BorderRadius.circular(22),
-        ),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.md),
         child: Row(
           children: [
+            // Avatar
             Stack(
               children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: avatarColor ?? Colors.pink.shade200,
-                  backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: avatarColor ?? AppColors.accentLight,
+                    image: photoUrl != null
+                        ? DecorationImage(image: NetworkImage(photoUrl!), fit: BoxFit.cover)
+                        : null,
+                  ),
+                  alignment: Alignment.center,
                   child: photoUrl == null
                       ? (avatarText != null
                           ? Text(
                               avatarText!,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                              style: AppTextStyle.label.copyWith(color: AppColors.accent),
                             )
-                          : Icon(leadingIcon ?? Icons.person, color: Colors.white))
+                          : Icon(leadingIcon ?? Icons.person, color: AppColors.accent, size: 22))
                       : null,
                 ),
                 if (isOnline)
                   Positioned(
-                    right: 0,
-                    bottom: 0,
+                    right: 1,
+                    bottom: 1,
                     child: Container(
-                      width: 14,
-                      height: 14,
+                      width: 12,
+                      height: 12,
                       decoration: BoxDecoration(
-                        color: Colors.green,
+                        color: AppColors.online,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(color: AppColors.background, width: 2),
                       ),
                     ),
                   ),
               ],
             ),
-            const SizedBox(width: 14),
+
+            const SizedBox(width: AppSpacing.md),
+
+            // Name + preview
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
+                  Text(name, style: AppTextStyle.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
                   Text(
                     message,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.grey.shade600),
+                    style: AppTextStyle.body2,
                   ),
                 ],
               ),
             ),
-            Text(
-              time,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-            ),
+
+            const SizedBox(width: AppSpacing.sm),
+
+            // Timestamp
+            Text(time, style: AppTextStyle.caption),
           ],
         ),
       ),

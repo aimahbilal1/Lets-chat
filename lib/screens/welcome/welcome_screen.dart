@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
-import '../../widgets/feature_card.dart';
+import '../../core/app_theme.dart';
 import '../../widgets/gradient_button.dart';
 import '../auth/login_screen.dart';
 import '../auth/signup_screen.dart';
@@ -12,164 +12,181 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
+      body: Stack(
+        children: [
+          // Decorative gradient — background only, never on interactive elements
+          Container(decoration: const BoxDecoration(gradient: AppColors.brandGradient)),
+
+          SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 20,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: MediaQuery.of(context).size.height - 60,
-                ),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // ─── Eyebrow label ────────────────────────────────────────
+                  Text(
+                    "MESSAGING REIMAGINED",
+                    style: AppTextStyle.caption.copyWith(
+                      letterSpacing: 1.5,
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // ─── Hero heading ─────────────────────────────────────────
+                  Text(
+                    "Welcome to\nLet's Chat",
+                    style: AppTextStyle.heading1.copyWith(fontSize: 34),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  Text(
+                    "Calm, focused conversations.\nYour words, your space.",
+                    style: AppTextStyle.body1.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.6,
+                    ),
+                  ),
+
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // ─── Social proof ─────────────────────────────────────────
+                  Row(
                     children: [
-                      const SizedBox(height: 20),
-                      const Text(
-                        "CONNECT EFFORTLESSLY",
-                        style: TextStyle(
-                          letterSpacing: 2,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        "Welcome to Let's Chat",
-                        style: TextStyle(
-                          fontSize: 38,
-                          fontWeight: FontWeight.bold,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        "Experience the next evolution of digital intimacy in our serene, ethereal community.",
-                        style: TextStyle(
-                          color: Colors.black.withOpacity(0.6),
-                          fontSize: 16,
-                          height: 1.7,
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                      Row(
+                      _AvatarStack(),
+                      const SizedBox(width: AppSpacing.md),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const CircleAvatar(
-                            radius: 24,
-                            backgroundColor: Colors.orange,
-                          ),
-                          Transform.translate(
-                            offset: const Offset(-12, 0),
-                            child: const CircleAvatar(
-                              radius: 24,
-                              backgroundColor: Colors.green,
+                          Text("10k+ joined today",
+                              style: AppTextStyle.label.copyWith(
+                                color: AppColors.textPrimary,
+                                fontSize: 14,
+                              )),
+                          Text("Join the community",
+                              style: AppTextStyle.caption.copyWith(
+                                color: AppColors.textSecondary,
+                              )),
+                        ],
+                      )
+                    ],
+                  ),
+
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // ─── Feature pills ────────────────────────────────────────
+                  _FeaturePill(icon: Icons.lock_outline, label: "End-to-end encrypted"),
+                  const SizedBox(height: AppSpacing.sm),
+                  _FeaturePill(icon: Icons.flash_on_outlined, label: "Instant delivery"),
+                  const SizedBox(height: AppSpacing.sm),
+                  _FeaturePill(icon: Icons.palette_outlined, label: "Beautiful, minimal design"),
+
+                  const Spacer(),
+
+                  // ─── CTA ──────────────────────────────────────────────────
+                  GradientButton(
+                    text: "Get Started",
+                    onTap: () => Navigator.push(
+                      context,
+                      _slide(const SignupScreen()),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  Center(
+                    child: RichText(
+                      text: TextSpan(
+                        text: "Already have an account?  ",
+                        style: AppTextStyle.body2,
+                        children: [
+                          TextSpan(
+                            text: "Log In",
+                            style: AppTextStyle.body2.copyWith(
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w600,
                             ),
-                          ),
-                          Transform.translate(
-                            offset: const Offset(-24, 0),
-                            child: const CircleAvatar(
-                              radius: 24,
-                              backgroundColor: Colors.pink,
-                            ),
-                          ),
-                          Transform.translate(
-                            offset: const Offset(-36, 0),
-                            child: Container(
-                              height: 48,
-                              width: 48,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.green.shade200,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Text("+10k"),
-                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () => Navigator.push(context, _slide(const LoginScreen())),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: const Text(
-                          "10k+ people joined today",
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                      const FeatureCard(
-                        icon: Icons.auto_awesome,
-                        title: "Pure Serenity",
-                        subtitle: "An interface designed for focus and tranquility.",
-                      ),
-                      const FeatureCard(
-                        icon: Icons.shield_outlined,
-                        title: "Safe Space",
-                        subtitle: "Encrypted, private conversations with total control.",
-                      ),
-                      const Spacer(),
-                      GradientButton(
-                        key: const ValueKey('get_started_button'),
-                        text: "Get Started",
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SignupScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 18),
-                      Center(
-                        child: RichText(
-                          text: TextSpan(
-                            text: "Already have an account? ",
-                            style: const TextStyle(
-                              color: Colors.black54,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: "Log In",
-                                style: const TextStyle(
-                                  color: Colors.green,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                recognizer: TapGestureRecognizer()
-                                  ..onTap = () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const LoginScreen(),
-                                      ),
-                                    );
-                                  },
-                              )
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 25),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  PageRouteBuilder _slide(Widget page) => PageRouteBuilder(
+        pageBuilder: (_, __, ___) => page,
+        transitionsBuilder: (_, anim, __, child) => SlideTransition(
+          position: Tween(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
+          child: child,
         ),
+        transitionDuration: const Duration(milliseconds: 300),
+      );
+}
+
+class _AvatarStack extends StatelessWidget {
+  final List<Color> _colors = const [
+    Color(0xFF7B9E87), Color(0xFFC08080), Color(0xFF8080C0),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 72,
+      height: 36,
+      child: Stack(
+        children: List.generate(_colors.length, (i) => Positioned(
+          left: i * 20.0,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _colors[i],
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.surface, width: 2),
+            ),
+          ),
+        )),
+      ),
+    );
+  }
+}
+
+class _FeaturePill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _FeaturePill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(AppRadius.full),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.accent),
+          const SizedBox(width: AppSpacing.sm),
+          Text(label, style: AppTextStyle.body2.copyWith(color: AppColors.textPrimary)),
+        ],
       ),
     );
   }

@@ -10,17 +10,14 @@ class CommunityScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chatService = Provider.of<ChatService>(context);
+    final chatService = Provider.of<ChatService>(context, listen: false);
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
@@ -160,7 +157,6 @@ class CommunityScreen extends StatelessWidget {
                   currentIndex: 2,
                 )
               ],
-            ),
           ),
         ),
       ),

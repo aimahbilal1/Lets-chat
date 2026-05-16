@@ -55,9 +55,8 @@ class _CallsScreenState extends State<CallsScreen> {
     final chatService = Provider.of<ChatService>(context);
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-        child: SafeArea(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
           child: Column(
             children: [
               // Header
@@ -301,7 +300,6 @@ class _CallsScreenState extends State<CallsScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import '../core/app_colors.dart';
+import '../core/app_theme.dart';
 
-// Stateful so password-visibility toggle can own its own _showText state.
-// Exposes all parameters needed for form validation, focus chaining, and
-// keyboard type — none of which a StatelessWidget can provide.
+/// Design-system text field — filled style, accent focus ring, clean error state.
 class CustomTextField extends StatefulWidget {
   final String hint;
   final IconData icon;
@@ -54,51 +54,22 @@ class _CustomTextFieldState extends State<CustomTextField> {
       enabled: widget.enabled,
       autocorrect: !widget.obscure,
       enableSuggestions: !widget.obscure,
+      style: AppTextStyle.body1.copyWith(color: AppColors.textPrimary),
       decoration: InputDecoration(
         hintText: widget.hint,
-        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-        prefixIcon: Icon(widget.icon, color: Colors.grey.shade500, size: 20),
+        prefixIcon: Icon(widget.icon, color: AppColors.textTertiary, size: 20),
         suffixIcon: widget.obscure
             ? IconButton(
                 icon: Icon(
                   obscureText
                       ? Icons.visibility_outlined
                       : Icons.visibility_off_outlined,
-                  color: Colors.grey.shade500,
+                  color: AppColors.textTertiary,
                   size: 20,
                 ),
                 onPressed: () => setState(() => _showText = !_showText),
               )
             : null,
-        filled: true,
-        fillColor: widget.enabled ? Colors.white : Colors.grey.shade100,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFF4D7C63), width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFE53935), width: 1),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFE53935), width: 1.5),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-        errorStyle: const TextStyle(fontSize: 12),
       ),
     );
   }
