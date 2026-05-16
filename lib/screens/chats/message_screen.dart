@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
@@ -44,6 +46,7 @@ class _MessageScreenState extends State<MessageScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isRecording = false;
   String? _currentlyPlayingId;
+  bool _emojiShowing = false;
 
   @override
   void initState() {
@@ -222,58 +225,78 @@ class _MessageScreenState extends State<MessageScreen> {
     }
   }
 
-  void _showDeleteDialog(String messageId, bool isCurrentUser) {
+  void _showMessageOptions(Map<String, dynamic> data, String messageId, bool isCurrentUser) {
+    final emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+    final isText = data['messageType'] == 'text';
+    final chatService = Provider.of<ChatService>(context, listen: false);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        margin: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Reaction row
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: emojis.map((emoji) => GestureDetector(
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await chatService.addReaction(widget.chatRoomId, messageId, emoji);
+                  },
+                  child: Text(emoji, style: const TextStyle(fontSize: 30)),
+                )).toList(),
+              ),
+            ),
+            const Divider(height: 1),
+            // Reply
+            ListTile(
+              leading: const Icon(Icons.reply, color: Colors.black87),
+              title: const Text("Reply"),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _replyingTo = {...data, 'id': messageId});
+              },
+            ),
+            // Copy (text only)
+            if (isText)
+              ListTile(
+                leading: const Icon(Icons.copy, color: Colors.black87),
+                title: const Text("Copy"),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Clipboard.setData(ClipboardData(text: data['message'] ?? ''));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Message copied"), duration: Duration(seconds: 1)),
+                  );
+                },
+              ),
+            // Delete for me
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.red),
               title: const Text("Delete for me", style: TextStyle(color: Colors.red)),
               onTap: () async {
-                Navigator.pop(context);
-                await Provider.of<ChatService>(context, listen: false).deleteMessage(widget.chatRoomId, messageId, forEveryone: false);
+                Navigator.pop(ctx);
+                await chatService.deleteMessage(widget.chatRoomId, messageId, forEveryone: false);
               },
             ),
+            // Delete for everyone (sender only)
             if (isCurrentUser)
               ListTile(
                 leading: const Icon(Icons.delete_forever, color: Colors.red),
                 title: const Text("Delete for everyone", style: TextStyle(color: Colors.red)),
                 onTap: () async {
-                  Navigator.pop(context);
-                  await Provider.of<ChatService>(context, listen: false).deleteMessage(widget.chatRoomId, messageId, forEveryone: true);
+                  Navigator.pop(ctx);
+                  await chatService.deleteMessage(widget.chatRoomId, messageId, forEveryone: true);
                 },
               ),
+            const SizedBox(height: 8),
           ],
-        ),
-      ),
-    );
-  }
-
-  void _showReactionDialog(String messageId) {
-    final emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-        margin: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: emojis.map((emoji) => GestureDetector(
-            onTap: () async {
-              Navigator.pop(context);
-              await Provider.of<ChatService>(context, listen: false).addReaction(widget.chatRoomId, messageId, emoji);
-            },
-            child: Text(emoji, style: const TextStyle(fontSize: 30)),
-          )).toList(),
         ),
       ),
     );
@@ -281,7 +304,7 @@ class _MessageScreenState extends State<MessageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final chatService = Provider.of<ChatService>(context);
+    final chatService = Provider.of<ChatService>(context, listen: false);
     final currentUser = FirebaseAuth.instance.currentUser;
 
     return StreamBuilder<DocumentSnapshot>(
@@ -449,12 +472,7 @@ class _MessageScreenState extends State<MessageScreen> {
                         return GestureDetector(
                           onLongPress: () {
                             if (data['messageType'] != 'deleted') {
-                              _showDeleteDialog(messageId, isCurrentUser);
-                            }
-                          },
-                          onDoubleTap: () {
-                            if (data['messageType'] != 'deleted') {
-                              _showReactionDialog(messageId);
+                              _showMessageOptions(data, messageId, isCurrentUser);
                             }
                           },
                           onHorizontalDragEnd: (details) {
@@ -544,15 +562,30 @@ class _MessageScreenState extends State<MessageScreen> {
                   ),
                   child: Row(
                     children: [
-                      IconButton(icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.black54), onPressed: () {}),
+                      IconButton(
+                        icon: Icon(
+                          _emojiShowing ? Icons.keyboard : Icons.emoji_emotions_outlined,
+                          color: Colors.black54,
+                        ),
+                        onPressed: () {
+                          if (_emojiShowing) {
+                            FocusScope.of(context).requestFocus(FocusNode());
+                          } else {
+                            FocusScope.of(context).unfocus();
+                          }
+                          setState(() => _emojiShowing = !_emojiShowing);
+                        },
+                      ),
                       IconButton(icon: const Icon(Icons.attach_file_outlined, color: Colors.black54), onPressed: () => _showAttachmentMenu(context)),
                       IconButton(icon: const Icon(Icons.camera_alt_outlined, color: Colors.black54), onPressed: () => _sendImageMessage(ImageSource.camera)),
                       Expanded(
-                        child: _isRecording 
+                        child: _isRecording
                           ? const Text("Recording...", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
                           : TextField(
                               controller: _messageController,
-                              onChanged: (val) => setState(() {}),
+                              onTap: () {
+                                if (_emojiShowing) setState(() => _emojiShowing = false);
+                              },
                               decoration: const InputDecoration(
                                 border: InputBorder.none,
                                 hintText: "Type message...",
@@ -561,28 +594,49 @@ class _MessageScreenState extends State<MessageScreen> {
                             onSubmitted: (_) => sendMessage(),
                           ),
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        if (_messageController.text.isNotEmpty) sendMessage();
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _messageController,
+                      builder: (context, value, _) {
+                        final hasText = value.text.isNotEmpty;
+                        return GestureDetector(
+                          onTap: () {
+                            if (hasText) sendMessage();
+                          },
+                          onLongPress: () {
+                            if (!hasText) _startRecording();
+                          },
+                          onLongPressEnd: (details) {
+                            if (_isRecording) _stopRecordingAndSend();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: _isRecording ? Colors.red : AppColors.mint,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(hasText ? Icons.send : Icons.mic_none, color: Colors.white, size: 20),
+                          ),
+                        );
                       },
-                      onLongPress: () {
-                        if (_messageController.text.isEmpty) _startRecording();
-                      },
-                      onLongPressEnd: (details) {
-                        if (_isRecording) _stopRecordingAndSend();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: _isRecording ? Colors.red : AppColors.mint, 
-                          shape: BoxShape.circle
-                        ),
-                        child: Icon(_messageController.text.isEmpty ? Icons.mic_none : Icons.send, color: Colors.white, size: 20),
-                      ),
                     ),
                   ],
                 ),
               ),
+              if (_emojiShowing)
+                SizedBox(
+                  height: 280,
+                  child: EmojiPicker(
+                    textEditingController: _messageController,
+                    onEmojiSelected: (category, emoji) {},
+                    config: const Config(
+                      emojiViewConfig: EmojiViewConfig(
+                        emojiSizeMax: 28,
+                        columns: 8,
+                      ),
+                      bottomActionBarConfig: BottomActionBarConfig(showBackspaceButton: true),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -778,7 +832,10 @@ class _MessageScreenState extends State<MessageScreen> {
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: reactions.keys.take(3).map((emoji) => Text(emoji, style: const TextStyle(fontSize: 12))).toList(),
+                children: reactions.entries
+                  .where((e) => (e.value as List).isNotEmpty)
+                  .map((e) => Text(e.key, style: const TextStyle(fontSize: 12)))
+                  .toList(),
               ),
             ),
           )

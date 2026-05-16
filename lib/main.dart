@@ -32,14 +32,31 @@ void main() async {
   runApp(const LetsChatApp());
 }
 
-class LetsChatApp extends StatefulWidget {
+class LetsChatApp extends StatelessWidget {
   const LetsChatApp({super.key});
 
   @override
-  State<LetsChatApp> createState() => _LetsChatAppState();
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthService()),
+        ChangeNotifierProvider(create: (_) => ChatService()),
+        Provider(create: (_) => StorageService()),
+        ChangeNotifierProvider(create: (_) => NotificationService()),
+      ],
+      child: const _LetsChatAppRoot(),
+    );
+  }
 }
 
-class _LetsChatAppState extends State<LetsChatApp> with WidgetsBindingObserver {
+class _LetsChatAppRoot extends StatefulWidget {
+  const _LetsChatAppRoot();
+
+  @override
+  State<_LetsChatAppRoot> createState() => _LetsChatAppRootState();
+}
+
+class _LetsChatAppRootState extends State<_LetsChatAppRoot> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -82,19 +99,11 @@ class _LetsChatAppState extends State<LetsChatApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthService()),
-        ChangeNotifierProvider(create: (_) => ChatService()),
-        Provider(create: (_) => StorageService()),
-        ChangeNotifierProvider(create: (_) => NotificationService()),
-      ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: "Let's Chat",
-        theme: AppTheme.lightTheme,
-        home: const SplashScreen(),
-      ),
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: "Let's Chat",
+      theme: AppTheme.lightTheme,
+      home: const SplashScreen(),
     );
   }
 }

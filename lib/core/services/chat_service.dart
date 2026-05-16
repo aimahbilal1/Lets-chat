@@ -248,7 +248,34 @@ class ChatService extends ChangeNotifier {
           .doc(chatRoomId)
           .collection('messages')
           .doc(messageId);
-      await ref.update({'reactions.$emoji': FieldValue.arrayUnion([currentUserId])});
+
+      final doc = await ref.get();
+      final data = doc.data() ?? {};
+      final Map<String, dynamic> reactions = Map<String, dynamic>.from(data['reactions'] ?? {});
+
+      // Find any emoji this user already reacted with
+      String? previousEmoji;
+      for (final entry in reactions.entries) {
+        final users = List<String>.from(entry.value as List);
+        if (users.contains(currentUserId)) {
+          previousEmoji = entry.key;
+          break;
+        }
+      }
+
+      final Map<String, dynamic> updates = {};
+
+      if (previousEmoji != null && previousEmoji != emoji) {
+        updates['reactions.$previousEmoji'] = FieldValue.arrayRemove([currentUserId]);
+      }
+
+      if (previousEmoji == emoji) {
+        updates['reactions.$emoji'] = FieldValue.arrayRemove([currentUserId]);
+      } else {
+        updates['reactions.$emoji'] = FieldValue.arrayUnion([currentUserId]);
+      }
+
+      await ref.update(updates);
     } catch (e, st) {
       _logError('addReaction', e, st);
     }
