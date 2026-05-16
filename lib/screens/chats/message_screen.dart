@@ -14,8 +14,11 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/app_colors.dart';
+import '../../core/services/call_signaling_service.dart';
 import '../../core/services/chat_service.dart';
 import '../../core/services/storage_service.dart';
+import '../calls/audio_call_screen.dart';
+import '../calls/video_call_screen.dart';
 import 'contact_details_screen.dart';
 import 'create_group_screen.dart';
 
@@ -215,6 +218,50 @@ class _MessageScreenState extends State<MessageScreen> {
     }
   }
 
+  Future<void> _startCall(BuildContext context, String type) async {
+    final signalingService = CallSignalingService();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final callerName = currentUser?.email?.split('@')[0] ?? 'Me';
+
+    try {
+      await signalingService.getLocalStream(video: type == 'video');
+      final callId = await signalingService.initiateCall(
+        receiverId: widget.receiverId,
+        callerName: callerName,
+        receiverName: widget.userName,
+        type: type,
+        onRemoteStream: (_) {},
+        onCallEnded: () {},
+      );
+
+      if (!context.mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => type == 'video'
+              ? VideoCallScreen(
+                  contactName: widget.userName,
+                  callId: callId,
+                  isCaller: true,
+                  signalingService: signalingService,
+                )
+              : AudioCallScreen(
+                  contactName: widget.userName,
+                  callId: callId,
+                  isCaller: true,
+                  signalingService: signalingService,
+                ),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start call: $e')),
+        );
+      }
+    }
+  }
+
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -407,8 +454,14 @@ class _MessageScreenState extends State<MessageScreen> {
                         ),
                       ),
                     ),
-                    IconButton(icon: const Icon(Icons.videocam_outlined), onPressed: () {}),
-                    IconButton(icon: const Icon(Icons.call_outlined), onPressed: () {}),
+                    IconButton(
+                      icon: const Icon(Icons.videocam_outlined),
+                      onPressed: () => _startCall(context, 'video'),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.call_outlined),
+                      onPressed: () => _startCall(context, 'audio'),
+                    ),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert),
                       onSelected: (value) {

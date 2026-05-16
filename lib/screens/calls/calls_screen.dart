@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
+import '../../core/services/call_signaling_service.dart';
 import '../../core/services/chat_service.dart';
 import '../../widgets/bottom_nav.dart';
 import '../chats/new_message_screen.dart';
+import 'audio_call_screen.dart';
+import 'video_call_screen.dart';
 
 class CallsScreen extends StatefulWidget {
   const CallsScreen({super.key});
@@ -426,6 +430,50 @@ class _CallsScreenState extends State<CallsScreen> {
     );
   }
 
+  Future<void> _placeCall(BuildContext context, String receiverId, String receiverName, String type) async {
+    final signalingService = CallSignalingService();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final callerName = currentUser?.email?.split('@')[0] ?? 'Me';
+
+    try {
+      await signalingService.getLocalStream(video: type == 'video');
+      final callId = await signalingService.initiateCall(
+        receiverId: receiverId,
+        callerName: callerName,
+        receiverName: receiverName,
+        type: type,
+        onRemoteStream: (_) {},
+        onCallEnded: () {},
+      );
+
+      if (!context.mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => type == 'video'
+              ? VideoCallScreen(
+                  contactName: receiverName,
+                  callId: callId,
+                  isCaller: true,
+                  signalingService: signalingService,
+                )
+              : AudioCallScreen(
+                  contactName: receiverName,
+                  callId: callId,
+                  isCaller: true,
+                  signalingService: signalingService,
+                ),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start call: $e')),
+        );
+      }
+    }
+  }
+
   void _scheduleCall(BuildContext context) async {
     final chatService = Provider.of<ChatService>(context, listen: false);
     showModalBottomSheet(
@@ -579,18 +627,13 @@ class _CallsScreenState extends State<CallsScreen> {
               ],
             ),
           ),
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.call_outlined, color: Colors.black54),
-            onPressed: () {
-              final chatService = Provider.of<ChatService>(
-                context,
-                listen: false,
-              );
-              chatService.logCall(receiverId, name, 'voice');
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text("Calling $name...")));
-            },
+            onSelected: (type) => _placeCall(context, receiverId, name, type),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'audio', child: Row(children: [Icon(Icons.call, size: 18), SizedBox(width: 8), Text('Audio call')])),
+              PopupMenuItem(value: 'video', child: Row(children: [Icon(Icons.videocam, size: 18), SizedBox(width: 8), Text('Video call')])),
+            ],
           ),
         ],
       ),

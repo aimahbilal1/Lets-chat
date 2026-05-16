@@ -15,13 +15,17 @@ class CommunityScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
 
-                Row(
+                      Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
@@ -153,11 +157,12 @@ class CommunityScreen extends StatelessWidget {
                   ),
                 ),
 
-                const BottomNav(
-                  currentIndex: 2,
-                )
-              ],
-          ),
+                    ],
+                ),
+              ),
+            ),
+            const BottomNav(currentIndex: 2),
+          ],
         ),
       ),
     );

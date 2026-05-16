@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -5,12 +6,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'core/app_theme.dart';
+import 'core/services/call_signaling_service.dart';
 import 'firebase_options.dart';
+import 'screens/calls/incoming_call_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/chat_service.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/notification_service.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,12 +62,42 @@ class _LetsChatAppRoot extends StatefulWidget {
 }
 
 class _LetsChatAppRootState extends State<_LetsChatAppRoot> with WidgetsBindingObserver {
+  final CallSignalingService _signalingService = CallSignalingService();
+  StreamSubscription<QuerySnapshot>? _incomingCallSub;
+  final Set<String> _handledCallIds = {};
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setPresence(isOnline: true);
     _initNotifications();
+    _listenForIncomingCalls();
+  }
+
+  void _listenForIncomingCalls() {
+    _incomingCallSub = _signalingService.incomingCallsStream().listen((snapshot) {
+      for (final doc in snapshot.docs) {
+        final callId = doc.id;
+        if (_handledCallIds.contains(callId)) continue;
+        _handledCallIds.add(callId);
+
+        final data = doc.data() as Map<String, dynamic>;
+        final callerName = data['callerName'] as String? ?? 'Unknown';
+        final callType = data['type'] as String? ?? 'audio';
+
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => IncomingCallScreen(
+              callId: callId,
+              callerName: callerName,
+              callType: callType,
+              signalingService: _signalingService,
+            ),
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _initNotifications() async {
@@ -92,6 +127,7 @@ class _LetsChatAppRootState extends State<_LetsChatAppRoot> with WidgetsBindingO
 
   @override
   void dispose() {
+    _incomingCallSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _setPresence(isOnline: false);
     super.dispose();
@@ -100,6 +136,7 @@ class _LetsChatAppRootState extends State<_LetsChatAppRoot> with WidgetsBindingO
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: "Let's Chat",
       theme: AppTheme.lightTheme,
