@@ -3,7 +3,11 @@
     "allow": [
       "Bash(pip3 show *)",
       "Bash(git filter-repo *)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(xattr -c \"/Users/mc/Uxelerate Projects/Lets-chat/build/app/outputs/apk/debug/app-debug.apk\")",
+      "Bash(chmod 644 \"/Users/mc/Uxelerate Projects/Lets-chat/build/app/outputs/apk/debug/app-debug.apk\")",
+      "Bash(ls \"/Users/mc/Flutter Projects/ds_dip_project/\" && echo \"---\" && ls \"/Users/mc/Flutter Projects/ds_dip_project/backend/\" 2>/dev/null)",
+      "Read(//Users/mc/Flutter Projects/ds_dip_project/**)"
     ]
   }
 }

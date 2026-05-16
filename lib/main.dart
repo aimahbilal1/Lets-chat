@@ -64,15 +64,24 @@ class _LetsChatAppRoot extends StatefulWidget {
 class _LetsChatAppRootState extends State<_LetsChatAppRoot> with WidgetsBindingObserver {
   final CallSignalingService _signalingService = CallSignalingService();
   StreamSubscription<QuerySnapshot>? _incomingCallSub;
+  StreamSubscription<User?>? _authSub;
   final Set<String> _handledCallIds = {};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _setPresence(isOnline: true);
     _initNotifications();
-    _listenForIncomingCalls();
+    // Re-subscribe to incoming calls whenever the user signs in/out so we
+    // never start listening on a null uid (which returns Stream.empty()).
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      _incomingCallSub?.cancel();
+      _handledCallIds.clear();
+      if (user != null) {
+        _setPresence(isOnline: true);
+        _listenForIncomingCalls();
+      }
+    });
   }
 
   void _listenForIncomingCalls() {
@@ -127,6 +136,7 @@ class _LetsChatAppRootState extends State<_LetsChatAppRoot> with WidgetsBindingO
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _incomingCallSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _setPresence(isOnline: false);
