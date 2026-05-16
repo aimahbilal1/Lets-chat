@@ -1,6 +1,7 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -49,7 +50,9 @@ class _MessageScreenState extends State<MessageScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isRecording = false;
   String? _currentlyPlayingId;
-  bool _emojiShowing = false;
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -72,6 +75,7 @@ class _MessageScreenState extends State<MessageScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _searchController.dispose();
     _audioRecorder.dispose();
     _audioPlayer.dispose();
     super.dispose();
@@ -403,7 +407,29 @@ class _MessageScreenState extends State<MessageScreen> {
               // Custom Chat AppBar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                child: Row(
+                child: _isSearching
+                    ? Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: () => setState(() { _isSearching = false; _searchQuery = ''; }),
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              autofocus: true,
+                              decoration: const InputDecoration(hintText: 'Search messages…', border: InputBorder.none),
+                              onChanged: (v) => setState(() => _searchQuery = v),
+                            ),
+                          ),
+                          if (_searchQuery.isNotEmpty)
+                            IconButton(icon: const Icon(Icons.clear), onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            }),
+                        ],
+                      )
+                    : Row(
                   children: [
                     IconButton(
                       onPressed: () => Navigator.pop(context),
@@ -451,7 +477,7 @@ class _MessageScreenState extends State<MessageScreen> {
                               } else {
                                 subtitle = isOnline
                                     ? "Online"
-                                    : (lastSeen != null ? "Last seen ${lastSeen.toDate().toString().substring(0, 16)}" : "Offline");
+                                    : (lastSeen != null ? "Last seen ${lastSeen.toDate().toString().substring(11, 16)}" : "Offline");
                               }
                             }
 
@@ -476,17 +502,19 @@ class _MessageScreenState extends State<MessageScreen> {
                     ),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert),
-                      onSelected: (value) {
+                      onSelected: (value) async {
                         if (value == 'View contact') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => ContactDetailsScreen(receiverId: widget.receiverId)),
-                          );
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => ContactDetailsScreen(receiverId: widget.receiverId)));
                         } else if (value == 'New group') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
-                          );
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateGroupScreen()));
+                        } else if (value == 'Search') {
+                          setState(() { _isSearching = true; _searchQuery = ''; _searchController.clear(); });
+                        } else if (value == 'Mute notifications') {
+                          final chatService = Provider.of<ChatService>(context, listen: false);
+                          await chatService.muteUser(widget.receiverId);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notifications muted')));
+                          }
                         }
                       },
                       itemBuilder: (BuildContext context) {
@@ -507,11 +535,21 @@ class _MessageScreenState extends State<MessageScreen> {
                     if (snapshot.hasError) return const Center(child: Text("Error loading messages"));
                     if (snapshot.connectionState == ConnectionState.waiting && _messageLimit == 40) return const Center(child: CircularProgressIndicator());
 
-                    final docs = snapshot.data!.docs;
+                    final allDocs = snapshot.data!.docs;
+                    final docs = _searchQuery.trim().isEmpty
+                        ? allDocs
+                        : allDocs.where((d) {
+                            final text = ((d.data() as Map<String, dynamic>)['message'] as String? ?? '').toLowerCase();
+                            return text.contains(_searchQuery.toLowerCase());
+                          }).toList();
 
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       chatService.markAllMessagesAsRead(widget.chatRoomId);
                     });
+
+                    if (_isSearching && docs.isEmpty && _searchQuery.trim().isNotEmpty) {
+                      return const Center(child: Text('No messages found'));
+                    }
 
                     return ListView.builder(
                       controller: _scrollController,
@@ -626,39 +664,33 @@ class _MessageScreenState extends State<MessageScreen> {
                     ],
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       IconButton(
-                        icon: Icon(
-                          _emojiShowing ? Icons.keyboard : Icons.emoji_emotions_outlined,
-                          color: Colors.black54,
-                        ),
-                        onPressed: () {
-                          if (_emojiShowing) {
-                            FocusScope.of(context).requestFocus(FocusNode());
-                          } else {
-                            FocusScope.of(context).unfocus();
-                          }
-                          setState(() => _emojiShowing = !_emojiShowing);
-                        },
+                        icon: const Icon(Icons.attach_file_outlined, color: Colors.black54),
+                        onPressed: () => _showAttachmentMenu(context),
                       ),
-                      IconButton(icon: const Icon(Icons.attach_file_outlined, color: Colors.black54), onPressed: () => _showAttachmentMenu(context)),
-                      IconButton(icon: const Icon(Icons.camera_alt_outlined, color: Colors.black54), onPressed: () => _sendImageMessage(ImageSource.camera)),
                       Expanded(
                         child: _isRecording
-                          ? const Text("Recording...", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                              child: Text("Recording...", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                            )
                           : TextField(
                               controller: _messageController,
-                              onTap: () {
-                                if (_emojiShowing) setState(() => _emojiShowing = false);
-                              },
+                              maxLines: 5,
+                              minLines: 1,
+                              textCapitalization: TextCapitalization.sentences,
                               decoration: const InputDecoration(
                                 border: InputBorder.none,
                                 hintText: "Type message...",
                                 hintStyle: TextStyle(fontSize: 15),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(vertical: 10),
+                              ),
+                              onSubmitted: (_) => sendMessage(),
                             ),
-                            onSubmitted: (_) => sendMessage(),
-                          ),
-                    ),
+                      ),
                     ValueListenableBuilder<TextEditingValue>(
                       valueListenable: _messageController,
                       builder: (context, value, _) {
@@ -687,21 +719,6 @@ class _MessageScreenState extends State<MessageScreen> {
                   ],
                 ),
               ),
-              if (_emojiShowing)
-                SizedBox(
-                  height: 280,
-                  child: EmojiPicker(
-                    textEditingController: _messageController,
-                    onEmojiSelected: (category, emoji) {},
-                    config: const Config(
-                      emojiViewConfig: EmojiViewConfig(
-                        emojiSizeMax: 28,
-                        columns: 8,
-                      ),
-                      bottomActionBarConfig: BottomActionBarConfig(showBackspaceButton: true),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),

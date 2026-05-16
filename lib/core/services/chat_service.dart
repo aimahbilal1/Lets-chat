@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import '../../models/message_model.dart';
 
@@ -172,19 +171,7 @@ class ChatService extends ChangeNotifier {
           .collection('messages')
           .doc(messageId);
       if (forEveryone) {
-        final doc = await ref.get();
-        final data = doc.data();
-        final String? mediaUrl = data?['mediaUrl'];
-
         await ref.update({'message': 'This message was deleted', 'messageType': 'deleted', 'mediaUrl': null});
-
-        if (mediaUrl != null && mediaUrl.isNotEmpty) {
-          try {
-            await FirebaseStorage.instance.refFromURL(mediaUrl).delete();
-          } catch (e) {
-            debugPrint("Storage delete error: $e");
-          }
-        }
       } else {
         await ref.update({'deletedFor': FieldValue.arrayUnion([_auth.currentUser!.uid])});
       }
@@ -202,19 +189,7 @@ class ChatService extends ChangeNotifier {
           .collection('messages')
           .doc(messageId);
       
-      final doc = await ref.get();
-      final data = doc.data();
-      final String? mediaUrl = data?['mediaUrl'];
-
       await ref.update({'message': 'This message was deleted', 'messageType': 'deleted', 'mediaUrl': null});
-
-      if (mediaUrl != null && mediaUrl.isNotEmpty) {
-        try {
-          await FirebaseStorage.instance.refFromURL(mediaUrl).delete();
-        } catch (e) {
-          debugPrint("Storage delete error: $e");
-        }
-      }
     } catch (e, st) {
       _logError('deleteGroupMessage', e, st);
       rethrow;
@@ -387,6 +362,20 @@ class ChatService extends ChangeNotifier {
       });
     } catch (e, st) {
       _logError('unmuteUser', e, st);
+    }
+  }
+
+  Future<void> reportUser(String reportedUserId, {String reason = 'Inappropriate behaviour'}) async {
+    try {
+      final currentUserId = _auth.currentUser!.uid;
+      await _firestore.collection('reports').add({
+        'reportedBy': currentUserId,
+        'reportedUser': reportedUserId,
+        'reason': reason,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e, st) {
+      _logError('reportUser', e, st);
     }
   }
 

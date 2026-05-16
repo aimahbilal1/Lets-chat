@@ -1,9 +1,14 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
+import '../../core/services/call_signaling_service.dart';
 import '../../core/services/chat_service.dart';
 import 'package:provider/provider.dart';
+import '../calls/audio_call_screen.dart';
+import '../calls/video_call_screen.dart';
 
 class ContactDetailsScreen extends StatelessWidget {
   final String receiverId;
@@ -99,11 +104,64 @@ class ContactDetailsScreen extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _quickAction(Icons.call_outlined, "Audio"),
+                            _quickAction(Icons.call_outlined, "Audio", onTap: () async {
+                              final currentUser = FirebaseAuth.instance.currentUser;
+                              final callerName = currentUser?.email?.split('@')[0] ?? 'Me';
+                              final signalingService = CallSignalingService();
+                              final chatService = Provider.of<ChatService>(context, listen: false);
+                              final result = await Navigator.push<Map<String, dynamic>>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => AudioCallScreen(
+                                    contactName: name,
+                                    receiverId: receiverId,
+                                    callerName: callerName,
+                                    isCaller: true,
+                                    signalingService: signalingService,
+                                  ),
+                                ),
+                              );
+                              if (context.mounted) {
+                                await chatService.logCallMessage(
+                                  receiverId, 'audio',
+                                  result?['status'] as String? ?? 'no_answer',
+                                  result?['duration'] as int? ?? 0,
+                                );
+                              }
+                            }),
                             const SizedBox(width: 30),
-                            _quickAction(Icons.videocam_outlined, "Video"),
+                            _quickAction(Icons.videocam_outlined, "Video", onTap: () async {
+                              final currentUser = FirebaseAuth.instance.currentUser;
+                              final callerName = currentUser?.email?.split('@')[0] ?? 'Me';
+                              final signalingService = CallSignalingService();
+                              final chatService = Provider.of<ChatService>(context, listen: false);
+                              final result = await Navigator.push<Map<String, dynamic>>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => VideoCallScreen(
+                                    contactName: name,
+                                    receiverId: receiverId,
+                                    callerName: callerName,
+                                    isCaller: true,
+                                    signalingService: signalingService,
+                                  ),
+                                ),
+                              );
+                              if (context.mounted) {
+                                await chatService.logCallMessage(
+                                  receiverId, 'video',
+                                  result?['status'] as String? ?? 'no_answer',
+                                  result?['duration'] as int? ?? 0,
+                                );
+                              }
+                            }),
                             const SizedBox(width: 30),
-                            _quickAction(Icons.search, "Search"),
+                            _quickAction(Icons.search, "Search", onTap: () {
+                              showSearch(
+                                context: context,
+                                delegate: _MessageSearchDelegate(receiverId: receiverId),
+                              );
+                            }),
                           ],
                         ),
 
@@ -168,12 +226,18 @@ class ContactDetailsScreen extends StatelessWidget {
                           }
                         ),
                         _actionListTile(
-                          "Report $name", 
-                          Icons.report_gmailerrorred, 
-                          Colors.red, 
+                          "Report $name",
+                          Icons.report_gmailerrorred,
+                          Colors.red,
                           context,
-                          onTap: () {
-                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Report sent")));
+                          onTap: () async {
+                            final chatService = Provider.of<ChatService>(context, listen: false);
+                            await chatService.reportUser(receiverId);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Report submitted. Thank you.")),
+                              );
+                            }
                           }
                         ),
 
@@ -190,20 +254,23 @@ class ContactDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _quickAction(IconData icon, String label) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.6),
-            shape: BoxShape.circle,
+  Widget _quickAction(IconData icon, String label, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.6),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.black87),
           ),
-          child: Icon(icon, color: Colors.black87),
-        ),
-        const SizedBox(height: 5),
-        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-      ],
+          const SizedBox(height: 5),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 
@@ -245,6 +312,7 @@ class ContactDetailsScreen extends StatelessWidget {
   }
 
   Widget _mediaGalleryCard(String receiverId) {
+
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
     List<String> ids = [currentUserId, receiverId];
     ids.sort();
@@ -315,6 +383,80 @@ class ContactDetailsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MessageSearchDelegate extends SearchDelegate<String> {
+  final String receiverId;
+
+  _MessageSearchDelegate({required this.receiverId});
+
+  @override
+  String get searchFieldLabel => 'Search messages…';
+
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+        IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ''),
+      ];
+
+  @override
+  Widget buildLeading(BuildContext context) =>
+      IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(context, ''));
+
+  @override
+  Widget buildResults(BuildContext context) => _buildList();
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildList();
+
+  Widget _buildList() {
+    if (query.trim().isEmpty) {
+      return const Center(child: Text('Type to search messages'));
+    }
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    List<String> ids = [currentUserId, receiverId];
+    ids.sort();
+    final chatRoomId = ids.join('_');
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('chat_rooms')
+          .doc(chatRoomId)
+          .collection('messages')
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final q = query.toLowerCase();
+        final docs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return (data['message'] as String? ?? '').toLowerCase().contains(q);
+        }).toList();
+
+        if (docs.isEmpty) return const Center(child: Text('No messages found'));
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            final text = data['message'] as String? ?? '';
+            final ts = (data['timestamp'] as Timestamp?)?.toDate();
+            final timeStr = ts != null
+                ? '${ts.day}/${ts.month} ${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}'
+                : '';
+            final isMe = data['senderId'] == currentUserId;
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: isMe ? Colors.green.shade100 : Colors.pink.shade100,
+                child: Icon(isMe ? Icons.person : Icons.person_outline, size: 18),
+              ),
+              title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+              subtitle: Text(timeStr, style: const TextStyle(fontSize: 11)),
+            );
+          },
+        );
+      },
     );
   }
 }

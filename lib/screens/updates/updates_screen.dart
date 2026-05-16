@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -217,8 +219,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                                     statusText,
                                     "Today, $time",
                                     Colors.pink.shade100,
+                                    mediaUrl: data['mediaUrl'] as String?,
                                     isLiked: isLiked,
                                     likeCount: likeCount,
+                                    onTap: () => _viewStatus(context, name, statusText, data['mediaUrl'] as String?),
                                     onLike:
                                         () => chatService.toggleStatusLike(
                                           doc.id,
@@ -253,18 +257,31 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     );
   }
 
+  void _viewStatus(BuildContext context, String name, String statusText, String? mediaUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _StatusViewScreen(name: name, statusText: statusText, mediaUrl: mediaUrl),
+      ),
+    );
+  }
+
   Widget _statusItem(
     BuildContext context,
     String name,
     String status,
     String time,
     Color color, {
+    String? mediaUrl,
+    required VoidCallback onTap,
     required bool isLiked,
     required int likeCount,
     required VoidCallback onLike,
     required VoidCallback onReply,
   }) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -352,7 +369,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
           ),
         ],
       ),
-    );
+    ),  // Container
+    );  // GestureDetector
   }
 
   void _showStatusOptions(BuildContext context) {
@@ -413,33 +431,32 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   }
 
   Future<void> _pickMedia(BuildContext context, ImageSource source) async {
+    // Capture references before any async gap — the bottom sheet context
+    // becomes deactivated after pickImage() returns.
+    final messenger = ScaffoldMessenger.of(context);
+    final storageService = Provider.of<StorageService>(context, listen: false);
+    final chatService = Provider.of<ChatService>(context, listen: false);
+
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
 
-    if (pickedFile != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Uploading status...")));
+    if (pickedFile == null) return;
+    if (!mounted) return;
 
-      final storageService = Provider.of<StorageService>(
-        context,
-        listen: false,
-      );
-      final chatService = Provider.of<ChatService>(context, listen: false);
+    messenger.showSnackBar(const SnackBar(content: Text("Uploading status...")));
 
-      final url = await storageService.uploadFile(
-        File(pickedFile.path),
-        'status_images',
+    final url = await storageService.uploadFile(File(pickedFile.path), 'status_images');
+
+    if (!mounted) return;
+    if (url != null) {
+      await chatService.postStatus(url, 'image');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("Status updated!"),
+          backgroundColor: AppColors.mint,
+        ),
       );
-      if (url != null) {
-        await chatService.postStatus(url, 'image');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Status updated!"),
-            backgroundColor: AppColors.mint,
-          ),
-        );
-      }
     }
   }
 
@@ -509,6 +526,73 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
             style: const TextStyle(fontSize: 12, color: Colors.black54),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StatusViewScreen extends StatelessWidget {
+  final String name;
+  final String statusText;
+  final String? mediaUrl;
+
+  const _StatusViewScreen({required this.name, required this.statusText, this.mediaUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Media or text content
+            if (mediaUrl != null)
+              Center(
+                child: Image.network(mediaUrl!, fit: BoxFit.contain),
+              )
+            else
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    statusText,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+
+            // Header
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.pink.shade100,
+                      child: Text(name[0], style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
